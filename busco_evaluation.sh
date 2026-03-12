@@ -30,7 +30,7 @@ echo "Transcript files at $tmp_files/trsc_$sp.fa"
 #get taxon id form SRR list(get most repeated id in taxon column for specie)
 taxonID=$(cut $species_name/srr_select.tsv -f4|sort|uniq -c|sort -nr|awk "{print $2}"|head -n1)
 #get lineage
-busco_lineage=$(python3 get_busco_db.py -e ibdyjsayzcllkyvjkc@nespf.com -t $taxonID -b ../../data/busco_downloads/file_versions.tsv -v odb12)
+busco_lineage=$(python3 scripts/get_busco_db.py -e ibdyjsayzcllkyvjkc@nespf.com -t $taxonID -b ../../data/busco_downloads/file_versions.tsv -v odb12)
 echo "BUSCO lineage for $taxonID is $busco_lineage"
 
 #Run busco
