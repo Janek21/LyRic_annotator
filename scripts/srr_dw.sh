@@ -8,10 +8,10 @@
 #SBATCH --qos=normal
 #SBATCH --time=180
 
-#SBATCH --mem=10G
+#SBATCH --mem=12G
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=6
+#SBATCH --cpus-per-task=4
 
 #SBATCH --array=0,3,4,5,21
 
@@ -23,7 +23,7 @@ echo ">STARTING at $(date)"
 module load SRA-Toolkit
 
 species_name="$1"
-cd $species_name
+#cd $species_name
 
 #How many lines to process per array task
 LINES_PER_TASK=4
@@ -36,7 +36,7 @@ END_LINE=$(( (SLURM_ARRAY_TASK_ID + 1) * LINES_PER_TASK ))
 echo "Processing lines $START_LINE through $END_LINE from $species_name/srr_list.tsv"
 
 #Extract block of 4 SRR IDs and loop them
-selectedSRRs=$(sed -n "${START_LINE},${END_LINE}p" srr_list.sv)
+selectedSRRs=$(sed -n "${START_LINE},${END_LINE}p" srr_list.tsv)
 
 for SRRid in $selectedSRRs; do
     echo "--- Processing $SRRid ---"
