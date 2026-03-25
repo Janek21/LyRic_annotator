@@ -21,39 +21,56 @@ lyric_out="$species_name/output/mappings/mergedReads"
 
 ##decompressions
 #decompress gffs
-find "$lyric_out" -type f -name "ont_*.gz"|xargs -r -P "$SLURM_CPUS_PER_TASK" unpigz -df
+find "$lyric_out" -type f -name "ont_*.gz"|xargs -r -P $(nproc) unpigz -df #$(nproc) unpigz -df #"$SLURM_CPUS_PER_TASK" unpigz -df
 #decompress fna if they are compressed still
-find ../data/species/"$species_name"/GCA* -type f -name "GCA*_genomic.fna.gz"|xargs -r -P "$SLURM_CPUS_PER_TASK" unpigz -df
+find ../data/species/"$species_name"*/GCA* -type f -name "GCA*_genomic.fna.gz"|xargs -r -P $(nproc) unpigz -df #$(nproc) unpigz -df #"$SLURM_CPUS_PER_TASK" unpigz -df
 
 #rename for long file names
 #Removes the prefix and sufix and replaces it with nothing ('')
-rename "ont_HpreCap_0+_" "" $lyric_output/ont_HpreCap_0+_[SE]RR*.gff
-rename ".HiSS.tmerge.min2reads.splicing_status-all.endSupport-all" "" $lyric_output/*.gff
-#merge gffs
-agat_sp_merge_annotations.pl --gff $lyric_out --out $tmp_files/merged_${sp}_ann.gff
-echo "Merged files at $tmp_files/merged_$sp.gff"
+rename "ont_HpreCap_0+_" "" $lyric_out/ont_HpreCap_0+_[DSE]RR*.gff
+rename ".HiSS.tmerge.min2reads.splicing_status-all.endSupport-all" "" $lyric_out/*.gff
+
+#detect number of files in folder(if 1 only ,dont merge)
+shopt -s nullglob
+gff_files=("$lyric_out"/*.gff)
+shopt -u nullglob
+file_count=${#gff_files[@]}
+
+echo "FC is $file_count"
+
+if [ $file_count -eq 1 ]; then
+	#if only 1 file, rename it for the rest of the pipeline
+	cp "${gff_files[0]}" "$tmp_files/merged_${sp}_ann.gff"
+	echo "Copied files at $tmp_files/merged_${sp}_ann.gff"
+else
+	#merge gffs
+	agat_sp_merge_annotations.pl --gff $lyric_out --out $tmp_files/merged_${sp}_ann.gff
+	echo "Merged files at $tmp_files/merged_${sp}_ann.gff"
+fi
 
 #get longest isoform
 agat_sp_keep_longest_isoform.pl --gff $tmp_files/merged_${sp}_ann.gff --out $tmp_files/longest_${sp}_ann.gff
 echo "Found longest isoforms."
 
 #transform to transcripts
-gffread $tmp_files/longest_${sp}_ann.gff -g ../data/species/$species_name/GCA*/GCA*_genomic.fna -w $tmp_files/trsc_$sp.fa
+gffread $tmp_files/longest_${sp}_ann.gff -g ../data/species/$species_name*/GCA*/GCA*.fna -w $tmp_files/trsc_$sp.fa
 echo "Transcript files at $tmp_files/trsc_$sp.fa"
 
 ##run busco
 
 #get taxon id form SRR list(get most repeated id in taxon column for specie)
 taxonID=$(cut $species_name/srr_select.tsv -f4|sort|uniq -c|sort -nr|awk '{print $2}'|head -n1)
+taxonID="36329"
 #get lineage
 busco_lineage=$(python3 scripts/get_busco_db.py -e ibdyjsayzcllkyvjkc@nespf.com -t $taxonID -b $busco_db/file_versions.tsv -v odb12)
 echo "BUSCO lineage for $taxonID is $busco_lineage"
 
 #Run busco
-busco -m transcriptome -i $tmp_files/trsc_$sp.fa --download_path $busco_db -l $busco_lineage -c "$SLURM_CPUS_PER_TASK" -f --out_path $species_name/output/busco_res --tar
+busco -m transcriptome -i $tmp_files/trsc_$sp.fa --download_path $busco_db -l $busco_lineage -c $(nproc) -f --out_path $species_name/output -o busco_res --tar
 
 #summary for all
-ln -vf $species_name/output/busco_res/*$sp*json busco_summary
+mv $species_name/output/busco_res/*json $species_name/output/busco_res/$species_name.json
+ln -vf $species_name/output/busco_res/*json busco_summary
 busco --plot busco_summary
 
 
