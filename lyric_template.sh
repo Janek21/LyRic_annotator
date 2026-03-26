@@ -41,7 +41,11 @@ cp scripts/runner.sh "$species_name/runner.sh"
 mkdir -p "$species_name/data/fastq"
 #cp scripts/srr_dw.sh $species_name
 
-sbatch scripts/srr_dw.sh "$species_name"
+#SRR downloader
+srr_count=$(wc -l < "$srr_list")
+array_max=$((srr_count - 1))
+
+sbatch --parsable --array=0-${array_max} scripts/srr_dw.sh "$species_name"
 
 echo "LyRic is ready to execute"
 

@@ -39,24 +39,24 @@ echo "Processing lines $START_LINE through $END_LINE from $species_name/srr_list
 selectedSRRs=$(sed -n "${START_LINE},${END_LINE}p" srr_list.tsv)
 
 
-for SRRid in $selectedSRRs; do    
-    echo "--- Processing $SRRid ---"
-    
-    #define things
-    out_dir="data/fastq"
-    SRR_path="$out_dir/$SRRid.fastq"
-    result_file="$out_dir/ont_HpreCap_0+_$SRRid.fastq.gz"
-    
-    
-    if [ -f "$result_file" ]; then #check if file has alreacy been downloaded
-    	echo "Skipping $SRRid: $result_file already exists."
-    	
-    else
-	    #Sownload the file
-	    fasterq-dump $SRRid -O "${out_dir}/" -e "$SLURM_CPUS_PER_TASK"
-	    
-	    #check existence each time to avoid getting stuck in errors
-	    if [ -f "$SRR_path" ]; then
+for SRRid in $selectedSRRs; do
+	echo "--- Processing $SRRid ---"
+	
+	#define things
+	out_dir="data/fastq"
+	SRR_path="$out_dir/$SRRid.fastq"
+	result_file="$out_dir/ont_HpreCap_0+_$SRRid.fastq.gz"
+	
+	
+	if [ -f "$result_file" ]; then #check if file has alreacy been downloaded
+		echo "Skipping $SRRid: $result_file already exists."
+		
+	else
+		#Sownload the file
+		fasterq-dump $SRRid -O "${out_dir}/" -e "$SLURM_CPUS_PER_TASK"
+		
+		#check existence each time to avoid getting stuck in errors
+		if [ -f "$SRR_path" ]; then
 		echo "downloaded $SRRid"
 		
 		#zip file
@@ -65,20 +65,19 @@ for SRRid in $selectedSRRs; do
 		#rename the file to specific format
 		mv "$SRR_path.gz" "$result_file"
 		echo "Complete: new file is $result_file"
-	    else
+		else
 		echo "Error: $SRR_path not found. Download may have failed."
-	    fi
-    fi
-    
+		fi
+	fi
 done
 
 # Record memory usage (at the end of all 4 downloads)
 cgroup_dir=$(awk -F: '{print $NF}' /proc/self/cgroup)
 # Check if the path exists to avoid errors on different cgroup versions
 if [ -f "/sys/fs/cgroup$cgroup_dir/memory.peak" ]; then
-    peak_mem=$(cat "/sys/fs/cgroup$cgroup_dir/memory.peak")
-    peak_mem_mb=$(awk "BEGIN {printf \"%.2f\", $peak_mem / 1048576}")
-    echo ">Peak memory was $peak_mem_mb MegaBytes"
+	peak_mem=$(cat "/sys/fs/cgroup$cgroup_dir/memory.peak")
+	peak_mem_mb=$(awk "BEGIN {printf \"%.2f\", $peak_mem / 1048576}")
+	echo ">Peak memory was $peak_mem_mb MegaBytes"
 fi
 
 # Record end

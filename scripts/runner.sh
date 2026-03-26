@@ -6,7 +6,7 @@
 #SBATCH --job-name=lyric
 
 #SBATCH --mem=42G
-#SBATCH --time=500
+#SBATCH --time=300
 
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
