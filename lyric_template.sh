@@ -45,7 +45,12 @@ mkdir -p "$species_name/data/fastq"
 srr_count=$(wc -l < "$srr_list")
 array_max=$((srr_count - 1))
 
-sbatch --parsable --array=0-${array_max} scripts/srr_dw.sh "$species_name"
+sbatch \
+	--job-name="srr_download_${sp}" \
+	--output="logs/%x.%A_%a.out" \
+	--error="logs/%x.%A_%a.err" \
+	--array=0-${array_max} \
+	scripts/srr_dw.sh "$species_name"
 
 echo "LyRic is ready to execute"
 
