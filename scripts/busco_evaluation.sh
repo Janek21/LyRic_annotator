@@ -17,6 +17,7 @@ conda activate buscomania
 tmp_files="$species_name/output/files"
 res_folder="$species_name/output/busco_res"
 
+rm -rf "$res_folder"
 mkdir -p "$res_folder"
 mkdir -p busco_summary
 

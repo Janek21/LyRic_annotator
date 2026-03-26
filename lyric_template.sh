@@ -3,6 +3,8 @@
 species_name="$1"
 longread_protists_db="${2:-../data/longread_protists.tsv}"
 
+module load SRA-Toolkit
+
 sp=$(echo "$species_name"|cut -f2 -d"_")
 echo "$sp"
 

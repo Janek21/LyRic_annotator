@@ -10,12 +10,12 @@ echo "$sp"
 source $(conda info --base)/etc/profile.d/conda.sh
 conda activate buscomania
 
-#create storing folders
-mkdir -p "$species_name/output/files" 
-
-
+#create storing folders and variables
 tmp_files="$species_name/output/files"
 lyric_out="$species_name/output/mappings/mergedReads"
+
+rm -rf "$tmp_files"
+mkdir -p "$tmp_files"
 
 ##decompressions
 #decompress gffs

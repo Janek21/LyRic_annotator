@@ -44,17 +44,21 @@ def keyword_extraction(description, keyword_list):
 def is_size_valid(srr_id, max_gb):
     """Checks if the SRR file size is within the allowed limit using vdb-dump."""
     try:
-        #Query SRA database for file info, with a 10-second timeout to prevent hangs
-        result=subprocess.run(['vdb-dump', srr_id, '--info'], capture_output=True, text=True, timeout=10)
+        print("Checking size for", srr_id)
+        result = subprocess.run(['vdb-dump', srr_id, '--info'], capture_output=True, text=True, timeout=15)
         for line in result.stdout.split('\n'):
             if line.strip().startswith('size'):
-                match=re.search(r'\d+', line)
-                if match:
-                    size_bytes=int(match.group())
-                    size_gb=size_bytes / (1024**3)
+                # Extract everything after the colon
+                size_str = line.split(':')[-1].strip()
+                # Remove any commas or spaces just in case
+                clean_size = re.sub(r'[, ]', '', size_str)
+                
+                if clean_size.isdigit():
+                    size_bytes = int(clean_size)
+                    size_gb = size_bytes / (1024**3)
                     return size_gb <= max_gb
     except Exception as e:
-        print(f"Warning: Could not determine size for {srr_id} ({e}). Skipping.")
+        print(f"Warning: Could not determine size for {srr_id} ({e}). Assuming invalid.")
         return False
     return False
     
