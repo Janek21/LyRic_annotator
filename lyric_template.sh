@@ -1,7 +1,7 @@
 #!/bin/bash
 
 species_name="$1"
-longread_protists_db="$2"
+longread_protists_db="${2:-../data/longread_protists.tsv}"
 
 sp=$(echo $species_name|cut -f2 -d"_")
 echo $sp
@@ -13,7 +13,7 @@ git clone https://github.com/Janek21/LyRic_nonhuman $species_name
 srr_list="$species_name/srr_list.tsv"
 grep "$sp" "$longread_protists_db" > "$species_name/full_srr.tsv"
 #select best SRRs
-python3 scripts/SRA_selector.py -i "$species_name/full_srr.tsv" -o "$species_name/srr_select.tsv" -s "$srr_list" -t 2
+python3 scripts/SRA_selector.py -i "$species_name/full_srr.tsv" -o "$species_name/srr_select.tsv" -s "$srr_list" -t 2 -m 6
 echo "SRA are $(wc -l $species_name/srr_select.tsv) at $species_name/srr_select.tsv"
 
 #Modify git for the current species and samples
@@ -39,9 +39,9 @@ touch $species_name/data/input/fakeCAGE.bed $species_name/data/input/fakeDHS.bed
 cp scripts/runner.sh $species_name/runner.sh
 
 mkdir -p $species_name/data/fastq
-cp scripts/srr_dw.sh $species_name
+#cp scripts/srr_dw.sh $species_name
 
-#sbatch srr_dw.sh $species_name
+sbatch scripts/srr_dw.sh $species_name
 
 echo "LyRic is ready to execute"
 

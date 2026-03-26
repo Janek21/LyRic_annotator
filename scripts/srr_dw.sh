@@ -8,12 +8,12 @@
 #SBATCH --qos=normal
 #SBATCH --time=180
 
-#SBATCH --mem=12G
+#SBATCH --mem=20G
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 
-#SBATCH --array=0,3,4,5,21
+#SBATCH --array=0-4
 
 #22 arrays of 4=can process up to 88 lines, we have 86(last task ahas 2 lines only
 
@@ -23,10 +23,10 @@ echo ">STARTING at $(date)"
 module load SRA-Toolkit
 
 species_name="$1"
-#cd $species_name
+cd $species_name
 
 #How many lines to process per array task
-LINES_PER_TASK=4
+LINES_PER_TASK=1
 
 #Line range for this specific array ID
 #If ID=0, START=1, END=4.
@@ -38,7 +38,8 @@ echo "Processing lines $START_LINE through $END_LINE from $species_name/srr_list
 #Extract block of 4 SRR IDs and loop them
 selectedSRRs=$(sed -n "${START_LINE},${END_LINE}p" srr_list.tsv)
 
-for SRRid in $selectedSRRs; do
+
+for SRRid in $selectedSRRs; do    
     echo "--- Processing $SRRid ---"
     
     #define things
@@ -52,14 +53,14 @@ for SRRid in $selectedSRRs; do
     	
     else
 	    #Sownload the file
-	    fasterq-dump $SRRid -O "${out_dir}/" -e $(nproc)
+	    fasterq-dump $SRRid -O "${out_dir}/" -e "$SLURM_CPUS_PER_TASK"
 	    
 	    #check existence each time to avoid getting stuck in errors
 	    if [ -f "$SRR_path" ]; then
 		echo "downloaded $SRRid"
 		
 		#zip file
-		pigz -9 -p $(nproc) "$SRR_path"
+		pigz -9 -p "$SLURM_CPUS_PER_TASK" "$SRR_path"
 		
 		#rename the file to specific format
 		mv "$SRR_path.gz" "$result_file"
