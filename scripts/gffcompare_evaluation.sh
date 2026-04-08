@@ -20,11 +20,13 @@ mkdir -p "$log_dir"
 mkdir -p gffcmp_summary
 
 #reference annotation
-ref_gff="../data/species/$species_name"*/GCA*/GCA*.fna
+ref_gff=$(realpath "../data/species/$species_name"*/GCA*/*GCA*.gff)
 #busco_evaluation cleaned annotation
 pred_gff="$species_name/output/files/longest_${sp}_ann.gff"
 
 echo "Running gffcompare for $species_name"
+echo "Reference at: $ref_gff"
+echo "Predicted at: $pred_gff"
 
 #all will be computed at logs folder
 prefix="$log_dir/${species_name}-Lycmp"
