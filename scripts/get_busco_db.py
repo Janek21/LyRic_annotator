@@ -1,4 +1,8 @@
+#!/usr/bin/env python
+
 import os
+import time
+import random
 import csv
 import argparse
 from Bio import Entrez
@@ -13,11 +17,24 @@ def get_taxonomy(taxon_id, query_email):
     os.makedirs(cache_dir, exist_ok=True)
     Entrez.local_cache = cache_dir
     Entrez.email = query_email 
-    handle = Entrez.efetch(db="taxonomy", id=taxon_id, retmode="xml")
-    records = Entrez.read(handle, validate=False)
-    handle.close()
-    lineage = records[0]["Lineage"].split("; ")
-    return lineage
+    
+    #slight random delay to not hit all requests at the same time
+    r_delay=random.uniform(1,5)
+    time.sleep(r_delay)
+    #retry loop
+    for attept in range(5):
+        try:
+            handle = Entrez.efetch(db="taxonomy", id=taxon_id, retmode="xml")
+            records = Entrez.read(handle, validate=False)
+            handle.close()
+            lineage = records[0]["Lineage"].split("; ")
+            return lineage
+        #catch error
+        except HTTPError as e:
+            if e.code==429: #overload ncbi error
+                timeWait=(2*attempt)+random.uniform(1,3)#timeout slightly random
+                print(f"NCBI rate limit hit. Task sleeping for {timeWait}s")
+                time.sleep(timeWait)
 
 def get_busco_lineage(taxon_id, query_email, busco_lineages, odb_version):
     lineage = get_taxonomy(taxon_id, query_email)

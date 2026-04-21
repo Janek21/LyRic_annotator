@@ -19,9 +19,9 @@ mkdir -p "$tmp_files"
 
 ##decompressions
 #decompress gffs
-find "$lyric_out" -type f -name "ont_*.gz"|xargs -r -P $(nproc) unpigz -df #$(nproc) unpigz -df #"$SLURM_CPUS_PER_TASK" unpigz -df
+find "$lyric_out" -type f -name "ont_*.gz"|xargs -r -P $(nproc) unpigz -df  #$(nproc) unpigz -df #"$SLURM_CPUS_PER_TASK" unpigz -df
 #decompress fna if they are compressed still
-find ../data/species/"$species_name"*/GCA* -type f -name "GCA*_genomic.fna.gz"|xargs -r -P $(nproc) unpigz -df #$(nproc) unpigz -df #"$SLURM_CPUS_PER_TASK" unpigz -df
+find ../data/species/"$species_name"*/GCA* -type f -name "GCA*_genomic.fna.gz"|xargs -r -P $(nproc) unpigz -df  #$(nproc) unpigz -df #"$SLURM_CPUS_PER_TASK" unpigz -df
 
 #rename for long file names
 #Removes the prefix and sufix and replaces it with nothing ('')
@@ -62,11 +62,15 @@ TD2.Predict -t "$tmp_files/transcripts_$sp.fa" -O "$tmp_files/transdecoder_work"
 
 #move TD2 files to correct folders(as prot and to log)
 mv "./transcripts_$sp.fa.TD2.pep" "$tmp_files/prot_$sp.fa"
-mv "./*.fa.TD2.*" "$tmp_files/transdecoder_work"
+mv ./*.fa.TD2.* "$tmp_files/transdecoder_work"
 
 echo "TransDecoder proteins in $tmp_files/prot_$sp.fa"
 
 mkdir -p logs
+
+##in Case of massExecution
+#bash scripts/busco_evaluation.sh "$species_name"
+#exit
 
 ##run busco
 sbatch \
@@ -78,9 +82,6 @@ sbatch \
 	--time=60 \
 	scripts/busco_evaluation.sh "$species_name" "$busco_db"
 
-rm -rf agat_log_*
-
-exit
 ##run gffcompare
 sbatch \
 	--job-name="gffcmp_${sp}" \

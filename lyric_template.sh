@@ -3,19 +3,20 @@
 species_name="$1"
 longread_protists_db="${2:-../data/longread_protists.tsv}"
 
-module load SRA-Toolkit
-
 sp=$(echo "$species_name"|cut -f2 -d"_")
 echo "$sp"
 
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate buscomania
+
 #clone templane for non-human annotation
-git clone https://github.com/Janek21/LyRic_nonhuman "$species_name"
+git clone -v https://github.com/Janek21/LyRic_nonhuman "$species_name"
 
 #select sra for specie
 srr_list="$species_name/srr_list.tsv"
 grep "$sp" "$longread_protists_db" > "$species_name/full_srr.tsv"
 #select best SRRs
-python3 scripts/SRA_selector.py -i "$species_name/full_srr.tsv" -o "$species_name/srr_select.tsv" -s "$srr_list" -t 2 -m 6
+python3 scripts/SRA_selector.py -i "$species_name/full_srr.tsv" -o "$species_name/srr_select.tsv" -s "$srr_list" -t 10 -m 6
 echo "SRA are $(wc -l $species_name/srr_select.tsv) at $species_name/srr_select.tsv"
 
 #Modify git for the current species and samples

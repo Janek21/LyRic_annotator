@@ -5,6 +5,7 @@ echo ">STARTING at $(date)"
 species_name="$1"
 #if no 2nd argument is given, it uses /no_backup...
 busco_db="${2:-/no_backup/rg/references/busco_downloads}"
+cpus="${SLURM_CPUS_PER_TASK:-$(nproc)}"
 
 #species shortname
 sp=$(echo "$species_name"|cut -f2 -d"_")
@@ -31,14 +32,12 @@ busco_lineage=$(python3 scripts/get_busco_db.py -e "ibdyjsayzcllkyvjkc@nespf.com
 echo "BUSCO lineage for $taxonID is $busco_lineage"
 
 #Run busco
-busco -m protein -i "$tmp_files/prot_$sp.fa" --download_path "$busco_db" -l "$busco_lineage" -c "$SLURM_CPUS_PER_TASK" -f --out_path "$species_name/output" -o busco_res --tar
+busco -m protein -i "$tmp_files/prot_$sp.fa" --download_path "$busco_db" -l "$busco_lineage" -c "$cpus" -f --out_path "${species_name}/output" -o busco_res --tar
 
 #summary for all
-mv "$res_folder"/*json "$res_folder/$species_name.json"
+mv "$res_folder"/*json "$res_folder/${species_name}_${taxonID}.json"
 ln -vf "$res_folder"/*json busco_summary
 busco --plot busco_summary
-
-
 
 #record memory usage
 cgroup_dir=$(awk -F: '{print $NF}' /proc/self/cgroup)
