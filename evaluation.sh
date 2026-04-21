@@ -25,8 +25,8 @@ find ../data/species/"$species_name"*/GCA* -type f -name "GCA*_genomic.fna.gz"|x
 
 #rename for long file names
 #Removes the prefix and sufix and replaces it with nothing ('')
-rename.ul "ont_HpreCap_0+_" "" "$lyric_out"/ont_HpreCap_0+_[DSE]RR*.gff
-rename.ul ".HiSS.tmerge.min2reads.splicing_status-all.endSupport-all" "" "$lyric_out"/*.gff
+rename "ont_HpreCap_0+_" "" "$lyric_out"/ont_HpreCap_0+_[DSE]RR*.gff
+rename ".HiSS.tmerge.min2reads.splicing_status-all.endSupport-all" "" "$lyric_out"/*.gff
 
 #detect number of files in folder(if 1 only ,dont merge)
 shopt -s nullglob
@@ -50,9 +50,21 @@ fi
 agat_sp_keep_longest_isoform.pl --gff "$tmp_files/merged_${sp}_ann.gff" --out "$tmp_files/longest_${sp}_ann.gff"
 echo "Found longest isoforms."
 
-#transform to transcripts
-gffread "$tmp_files/longest_${sp}_ann.gff" -g ../data/species/"$species_name"*/GCA*/GCA*.fna -w "$tmp_files/trsc_$sp.fa"
-echo "Transcript files at $tmp_files/trsc_$sp.fa"
+#i# transform to proteins (sequences with premature stops or frameshifts will be translated exactly as your in gff3+computationally better)
+#generate transcriptome with gffread
+gffread "$tmp_files/longest_${sp}_ann.gff" -g ../data/species/"$species_name"*/GCA*/GCA*.fna -w "$tmp_files/transcripts_$sp.fa"
+
+#Find ORFs in transcripts
+TD2.LongOrfs -t "$tmp_files/transcripts_$sp.fa" -O "$tmp_files/transdecoder_work"
+
+#Select most probable ORFs to create proteins
+TD2.Predict -t "$tmp_files/transcripts_$sp.fa" -O "$tmp_files/transdecoder_work" #-O is output of ORFs
+
+#move TD2 files to correct folders(as prot and to log)
+mv "./transcripts_$sp.fa.TD2.pep" "$tmp_files/prot_$sp.fa"
+mv "./*.fa.TD2.*" "$tmp_files/transdecoder_work"
+
+echo "TransDecoder proteins in $tmp_files/prot_$sp.fa"
 
 mkdir -p logs
 
@@ -63,9 +75,12 @@ sbatch \
 	--mem=16G \
 	--output="logs/%x_%j.out" \
 	--error="logs/%x_%j.err" \
-	--time=90 \
+	--time=60 \
 	scripts/busco_evaluation.sh "$species_name" "$busco_db"
 
+rm -rf agat_log_*
+
+exit
 ##run gffcompare
 sbatch \
 	--job-name="gffcmp_${sp}" \
@@ -76,4 +91,5 @@ sbatch \
 	--time=10 \
 	scripts/gffcompare_evaluation.sh "$species_name"
 
-
+rm -rf agat_log_*
+echo "Analysis completed!"

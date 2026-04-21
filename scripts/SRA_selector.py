@@ -44,7 +44,6 @@ def keyword_extraction(description, keyword_list):
 def is_size_valid(srr_id, max_gb):
     """Checks if the SRR file size is within the allowed limit using vdb-dump."""
     try:
-        print("Checking size for", srr_id)
         result = subprocess.run(['vdb-dump', srr_id, '--info'], capture_output=True, text=True, timeout=15)
         for line in result.stdout.split('\n'):
             if line.strip().startswith('size'):
@@ -56,16 +55,16 @@ def is_size_valid(srr_id, max_gb):
                 if clean_size.isdigit():
                     size_bytes = int(clean_size)
                     size_gb = size_bytes / (1024**3)
+                    print(f"Size for {srr_id}: {size_gb} GB")
                     return size_gb <= max_gb
     except Exception as e:
         print(f"Warning: Could not determine size for {srr_id} ({e}). Assuming invalid.")
         return False
-    return False
-    
+    return False   
 
 
 
-def sra_for_annotation(df, topReads=1, max_gb=6.0):
+def sra_for_annotation(df, topReads=1, max_gb=9999999999999999.0):
     """Takes SRA with n top most reads per each Platform, tissue and developement stage of a particular species"""
     #Source selection, single cell tends to be worse
     df=df[df["Source"].str.contains("TRANSCRIPTOMIC", case=False, na=False)].reset_index(drop=True)
@@ -105,7 +104,7 @@ def main():
     parser.add_argument("-o", "--output", type=str, required=True, help="Path to save the output TSV file.")
     parser.add_argument("-s", "--srr_id", type=str, help="Path to save the SRR indexes to a TSV file.")
     parser.add_argument("-t", "--topReads", type=int, default=2, help="Optional: Number of top SRA runs to select per group (default is 2).")
-    parser.add_argument("-m", "--max_size", type=float, default=6.0, help="Optional: Maximum file size in GB (default is 6.0).")
+    parser.add_argument("-m", "--max_size", type=float, default=9999999999999999.0, help="Optional: Maximum file size in GB (if none is provided all are accepted).")
 
     args=parser.parse_args()
 

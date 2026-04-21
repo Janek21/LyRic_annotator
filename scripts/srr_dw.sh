@@ -6,14 +6,14 @@
 #SBATCH --job-name=srr_download
 
 #SBATCH --qos=normal
-#SBATCH --time=180
+#SBATCH --time=120
 
-#SBATCH --mem=20G
+#SBATCH --mem=16G
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 
-#SBATCH --array=0-4
+#SBATCH --array=0-1
 
 #22 arrays of 4=can process up to 88 lines, we have 86(last task ahas 2 lines only
 

@@ -5,14 +5,15 @@
 #SBATCH --qos=normal
 #SBATCH --job-name=lyric
 
-#SBATCH --mem=42G
+#SBATCH --mem=24G
 #SBATCH --time=300
 
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=4
 
 #record start
+start_time=$(date +%s)
 echo ">STARTING at $(date)"
 
 module load CMake/3.29.3-GCCcore-12.3.0 
@@ -21,7 +22,7 @@ module load Python/3.13.5-GCCcore-14.3.0
 source ~/bin/snakemake/bin/activate
 
 snakemake --unlock
-snakemake --cores all --configfile config/default.yaml --keep-going
+snakemake --cores $SLURM_CPUS_PER_TASK --configfile config/default.yaml --keep-going
 
 #record memory usage
 cgroup_dir=$(awk -F: '{print $NF}' /proc/self/cgroup)
@@ -30,5 +31,7 @@ peak_mem_mb=$(awk "BEGIN {printf \"%.2f\", $peak_mem / 1048576}") #transfer to m
 echo ">Peak memory was $peak_mem_mb MegaBytes"
 
 #record end
+elapsed_time=$(( $(date +%s) - start_time ))
+echo "It takes $((elapsed_time / 60 )) minutes"
 echo ">ENDING at $(date)"
 
