@@ -4,6 +4,7 @@ species_name="$1"
 longread_protists_db="${2:-../data/longread_protists.tsv}"
 
 sp=$(echo "$species_name"|cut -f2 -d"_")
+sp_extra=$(echo "$species_name"|cut -f3 -d"_")
 echo "$sp"
 
 source $(conda info --base)/etc/profile.d/conda.sh
@@ -14,10 +15,20 @@ git clone -v https://github.com/Janek21/LyRic_nonhuman "$species_name"
 
 #select sra for specie
 srr_list="$species_name/srr_list.tsv"
-grep "$sp" "$longread_protists_db" > "$species_name/full_srr.tsv"
+
+#attempt maximum specificity (term 2+3 of name)
+echo "Searching for $sp+$sp_extra"
+search_res=$(grep -i "$sp" "$longread_protists_db" | grep -i "$sp_extra")
+
+if [ -z "$search_res" ]; then
+    echo "No match found for both terms. Falling back to: $sp"
+    search_res=$(grep -i "$sp" "$longread_protists_db")
+fi
+
+echo "$search_res" > "$species_name/full_srr.tsv"
 #select best SRRs
-python3 scripts/SRA_selector.py -i "$species_name/full_srr.tsv" -o "$species_name/srr_select.tsv" -s "$srr_list" -t 10 -m 6
-echo "SRA are $(wc -l $species_name/srr_select.tsv) at $species_name/srr_select.tsv"
+python3 scripts/SRA_selector.py -i "$species_name/full_srr.tsv" -o "$species_name/srr_select.tsv" -s "$srr_list" -t 15 -m 8
+echo "Selected SRA are $(wc -l $species_name/srr_select.tsv)"
 
 #Modify git for the current species and samples
 shortname=$(python3 scripts/LyRic_setup.py shortname -s "$species_name")

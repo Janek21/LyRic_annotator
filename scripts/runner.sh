@@ -20,9 +20,10 @@ module load CMake/3.29.3-GCCcore-12.3.0
 module load Python/3.13.5-GCCcore-14.3.0
 
 source ~/bin/snakemake/bin/activate
+cpus="${SLURM_CPUS_PER_TASK:-2}"
 
 snakemake --unlock
-snakemake --cores $SLURM_CPUS_PER_TASK --configfile config/default.yaml --keep-going
+snakemake --cores $cpus --configfile config/default.yaml --keep-going
 
 #record memory usage
 cgroup_dir=$(awk -F: '{print $NF}' /proc/self/cgroup)
