@@ -43,6 +43,8 @@ python3 scripts/LyRic_setup.py config -s "$species_name" -o "$species_name/confi
 python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$species_name"*/GCA*/GCA*_genomic.fna -o "$species_name/data/fasta/$shortname.fa.gz"
 #copy the genome annotation
 python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$species_name"*/GCA*/"$species_name"*GCA*.gff -o "$species_name/data/input/Annotation.gff"
+#if no annotation was produced, find the closest related species that has one
+python3 scripts/annotation_fallback.py -s "$species_name" -d "$longread_protists_db" -r "../data/species" -o "$species_name/data/input/Annotation.gff"
 #set up the sample annotations
 python3 scripts/LyRic_setup.py annotate_config -s "$species_name" -i "$srr_list" -o "$species_name/data/sample_annotations.tsv"
 
