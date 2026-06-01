@@ -61,12 +61,15 @@ mkdir -p "$species_name/data/fastq"
 srr_count=$(wc -l < "$srr_list")
 array_max=$((srr_count - 1))
 
-sbatch \
+dl_jobid=$(sbatch --parsable \
 	--job-name="srr_download_${sp}" \
 	--output="logs/%x.%A_%a.out" \
 	--error="logs/%x.%A_%a.err" \
 	--array=0-${array_max} \
-	scripts/srr_dw.sh "$species_name"
+	scripts/srr_dw.sh "$species_name")
+echo "Download array submitted: job $dl_jobid"
+#parsable line so lyric_prepare.sh can chain the next stages on this job
+echo "DOWNLOAD_JOBID=$dl_jobid"
 
 echo "LyRic is ready to execute"
 

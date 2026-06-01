@@ -22,7 +22,7 @@ def get_taxonomy(taxon_id, query_email):
     r_delay=random.uniform(1,5)
     time.sleep(r_delay)
     #retry loop
-    for attept in range(5):
+    for attempt in range(5):
         try:
             handle = Entrez.efetch(db="taxonomy", id=taxon_id, retmode="xml")
             records = Entrez.read(handle, validate=False)

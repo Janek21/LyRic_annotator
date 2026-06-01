@@ -8,70 +8,54 @@
 #SBATCH --qos=normal
 #SBATCH --time=180
 
-#SBATCH --mem=16G
+#SBATCH --mem=4G
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
-
-##SBATCH --array=0-1
-
-#22 arrays of 4=can process up to 88 lines, we have 86(last task ahas 2 lines only
-
+#SBATCH --cpus-per-task=2
 
 echo ">STARTING at $(date)"
 
-module load SRA-Toolkit
+set -euo pipefail
 
 species_name="$1"
-cd $species_name
+cd "$species_name"
 
-#How many lines to process per array task
-LINES_PER_TASK=1
+out_dir="data/fastq"
+mkdir -p "$out_dir"
 
-#Line range for this specific array ID
-#If ID=0, START=1, END=4.
-START_LINE=$(( SLURM_ARRAY_TASK_ID * LINES_PER_TASK + 1 ))
-END_LINE=$(( (SLURM_ARRAY_TASK_ID + 1) * LINES_PER_TASK ))
+# accession for this array task (line SLURM_ARRAY_TASK_ID + 1)
+SRRid=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" srr_list.tsv)
 
-echo "Processing lines $START_LINE through $END_LINE from $species_name/srr_list.tsv"
+if [ -z "$SRRid" ]; then
+	echo "ERROR: no accession at index $SLURM_ARRAY_TASK_ID in $species_name/srr_list.tsv"
+	exit 1
+fi
 
-#Extract block of 4 SRR IDs and loop them
-selectedSRRs=$(sed -n "${START_LINE},${END_LINE}p" srr_list.tsv)
+result_file="$out_dir/ont_HpreCap_0+_$SRRid.fastq.gz"
 
-
-for SRRid in $selectedSRRs; do
+if [ -f "$result_file" ]; then #check if file has already been downloaded
+	echo "Skipping $SRRid: $result_file already exists."
+else
 	echo "--- Processing $SRRid ---"
-	
-	#define things
-	out_dir="data/fastq"
-	SRR_path="$out_dir/$SRRid.fastq"
-	result_file="$out_dir/ont_HpreCap_0+_$SRRid.fastq.gz"
-	
-	
-	if [ -f "$result_file" ]; then #check if file has alreacy been downloaded
-		echo "Skipping $SRRid: $result_file already exists."
-		
-	else
-		#Sownload the file
-		fasterq-dump $SRRid -O "${out_dir}/" -e "$SLURM_CPUS_PER_TASK"
-		
-		#check existence each time to avoid getting stuck in errors
-		if [ -f "$SRR_path" ]; then
-		echo "downloaded $SRRid"
-		
-		#zip file
-		pigz -9 -p "$SLURM_CPUS_PER_TASK" "$SRR_path"
-		
-		#rename the file to specific format
-		mv "$SRR_path.gz" "$result_file"
-		echo "Complete: new file is $result_file"
-		else
-		echo "Error: $SRR_path not found. Download may have failed."
-		fi
-	fi
-done
 
-# Record memory usage (at the end of all 4 downloads)
+	#Resolve the FASTQ FTP URL from ENA (returns paths without ftp:// prefix)
+	FTP_URL=$(curl -sf "https://www.ebi.ac.uk/ena/portal/api/filereport?accession=${SRRid}&result=read_run&fields=fastq_ftp" \
+		| tail -n +2 | cut -f2 | tr ';' '\n' | head -1)
+
+	if [ -z "$FTP_URL" ]; then
+		echo "Error: could not retrieve FTP URL for $SRRid from ENA."
+		exit 1
+	fi
+
+	#Download to a temp file, move on success (avoids leaving a partial file that
+	#the skip-check above would mistake for a finished download)
+	tmp_file="$out_dir/$SRRid.fastq.gz.part"
+	wget -q -O "$tmp_file" "ftp://${FTP_URL}"
+	mv "$tmp_file" "$result_file"
+	echo "Complete: new file is $result_file"
+fi
+
+# Record memory usage at the end
 cgroup_dir=$(awk -F: '{print $NF}' /proc/self/cgroup)
 # Check if the path exists to avoid errors on different cgroup versions
 if [ -f "/sys/fs/cgroup$cgroup_dir/memory.peak" ]; then

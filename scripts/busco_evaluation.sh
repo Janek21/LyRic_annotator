@@ -34,10 +34,12 @@ echo "BUSCO lineage for $taxonID is $busco_lineage"
 #Run busco
 busco -m protein -i "$tmp_files/prot_$sp.fa" --download_path "$busco_db" -l "$busco_lineage" -c "$cpus" -f --out_path "${species_name}/output" -o busco_res --tar
 
-#summary for all
-mv "$res_folder"/*json "$res_folder/${species_name}_${taxonID}.json"
-ln -vf "$res_folder"/*json busco_summary
-busco --plot busco_summary
+#move the summary json into busco_summary (name ends in _busco.json),
+#then symlink it back into the original results directory
+summary_json="busco_summary/${species_name}_${taxonID}_busco.json"
+mv "$res_folder"/*json "$summary_json"
+ln -sfv "$(realpath "$summary_json")" "$res_folder/${species_name}_${taxonID}_busco.json"
+busco --plot "busco_summary"
 
 #record memory usage
 cgroup_dir=$(awk -F: '{print $NF}' /proc/self/cgroup)
