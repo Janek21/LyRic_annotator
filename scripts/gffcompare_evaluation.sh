@@ -20,7 +20,9 @@ mkdir -p "$log_dir"
 mkdir -p gffcmp_summary
 
 #reference annotation
-ref_gff=$(realpath "../data/species/$species_name"*/GCA*/*GCA*.gff)
+ref_gff=$(realpath "../data/species/$species_name"*/GC*/*GC*.gff)
+#assembly prefix of this species (GCA or GCF), taken from the reference filename
+gc_prefix=$(basename "$ref_gff" | grep -oE 'GC[AF]' | head -1)
 #busco_evaluation cleaned annotation
 pred_gff="$species_name/output/files/longest_${sp}_ann.gff"
 
@@ -33,9 +35,9 @@ questionPresence_ref=$(cut -f7 $ref_gff|grep -Fx "?"|wc -l)
 
 if [ "$questionPresence_ref" -ne 0 ]; then
 	echo "Replacing ? strand symbol in reference annotation"
-	awk -F'\t' 'BEGIN{OFS="\t"} {$7=gensub(/\?/, ".", "g", $7); print}' "$ref_gff" > "$species_name/output/files/newRef_GCA_${species_name}.gff"
+	awk -F'\t' 'BEGIN{OFS="\t"} {$7=gensub(/\?/, ".", "g", $7); print}' "$ref_gff" > "$species_name/output/files/newRef_${gc_prefix}_${species_name}.gff"
 	#replace reference variable
-	ref_gff="$species_name/output/files/newRef_GCA_${species_name}.gff"
+	ref_gff="$species_name/output/files/newRef_${gc_prefix}_${species_name}.gff"
 fi
 
 questionPresence_pred=$(cut -f7 $pred_gff|grep -Fx "?"|wc -l)

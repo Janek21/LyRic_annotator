@@ -34,15 +34,15 @@ echo "Selected SRA are $(wc -l $species_name/srr_select.tsv)"
 shortname=$(python3 scripts/LyRic_setup.py shortname -s "$species_name")
 
 #decompress files if any remain compressed
-find ../data/species/"$species_name"*/GCA* -type f -name "*GCA*.gz"|xargs -r -P $(nproc) unpigz -df
+find ../data/species/"$species_name"*/GC* -type f -name "*GC*.gz"|xargs -r -P $(nproc) unpigz -df
 echo "Decompressed genome and reference anotation files."
 
 #config.default.yaml, per the species name
 python3 scripts/LyRic_setup.py config -s "$species_name" -o "$species_name/config/default.yaml"
 #copy and compress the genome sequence
-python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$species_name"*/GCA*/GCA*_genomic.fna -o "$species_name/data/fasta/$shortname.fa.gz"
+python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$species_name"*/GC*/GC*_genomic.fna -o "$species_name/data/fasta/$shortname.fa.gz"
 #copy the genome annotation
-python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$species_name"*/GCA*/"$species_name"*GCA*.gff -o "$species_name/data/input/Annotation.gff"
+python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$species_name"*/GC*/"$species_name"*GC*.gff -o "$species_name/data/input/Annotation.gff"
 #if no annotation was produced, find the closest related species that has one
 python3 scripts/annotation_fallback.py -s "$species_name" -d "$longread_protists_db" -r "../data/species" -o "$species_name/data/input/Annotation.gff"
 #set up the sample annotations

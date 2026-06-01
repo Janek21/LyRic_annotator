@@ -21,7 +21,7 @@ mkdir -p "$tmp_files"
 #decompress gffs
 find "$lyric_out" -type f -name "ont_*.gz"|xargs -r -P $(nproc) unpigz -df  #$(nproc) unpigz -df #"$SLURM_CPUS_PER_TASK" unpigz -df
 #decompress fna if they are compressed still
-find ../data/species/"$species_name"*/GCA* -type f -name "GCA*_genomic.fna.gz"|xargs -r -P $(nproc) unpigz -df  #$(nproc) unpigz -df #"$SLURM_CPUS_PER_TASK" unpigz -df
+find ../data/species/"$species_name"*/GC* -type f -name "GC*_genomic.fna.gz"|xargs -r -P $(nproc) unpigz -df  #$(nproc) unpigz -df #"$SLURM_CPUS_PER_TASK" unpigz -df
 
 #rename for long file names
 #Removes the prefix and sufix and replaces it with nothing ('')
@@ -64,7 +64,7 @@ echo "Found longest isoforms."
 
 #i# transform to proteins (sequences with premature stops or frameshifts will be translated exactly as your in gff3+computationally better)
 #generate transcriptome with gffread
-gffread "$tmp_files/longest_${sp}_ann.gff" -g ../data/species/"$species_name"*/GCA*/GCA*.fna -w "$tmp_files/transcripts_$sp.fa"
+gffread "$tmp_files/longest_${sp}_ann.gff" -g ../data/species/"$species_name"*/GC*/GC*.fna -w "$tmp_files/transcripts_$sp.fa"
 
 #Find ORFs in transcripts
 TD2.LongOrfs -t "$tmp_files/transcripts_$sp.fa" -O "$tmp_files/transdecoder_work"
