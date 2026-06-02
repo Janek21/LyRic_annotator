@@ -47,15 +47,15 @@ else
 fi
 
 #count gene and transcript models in the merged annotation
-busco_summary_dir="busco_summary"
-mkdir -p "$busco_summary_dir"
+counts_dir="summary/counts"
+mkdir -p "$counts_dir"
 merged="$tmp_files/merged_${sp}_ann.gff"
 #taxon id = most repeated id in the taxon column (same as busco_evaluation.sh)
 taxonID=$(cut "$species_name/srr_select.tsv" -f4|sort|uniq -c|sort -nr|awk '{print $2}'|head -n1)
 gene_count=$(cut -f3 "$merged" | grep -cxF "gene" || true)
 transcript_count=$(cut -f3 "$merged" | grep -cxE 'transcript|mRNA' || true)
-echo "$gene_count" > "$busco_summary_dir/${species_name}_${taxonID}_gc.txt"
-echo "$transcript_count" > "$busco_summary_dir/${species_name}_${taxonID}_tc.txt"
+echo "$gene_count" > "$counts_dir/${species_name}_${taxonID}_gc.txt"
+echo "$transcript_count" > "$counts_dir/${species_name}_${taxonID}_tc.txt"
 echo "      Gene models: $gene_count | Transcript models: $transcript_count"
 
 #get longest isoform

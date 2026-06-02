@@ -14,10 +14,11 @@ echo "$sp"
 #create storing folders and variables
 gffcmp_dir="$species_name/output/gffcmp"
 log_dir="$species_name/output/compare_logs"
+gffcmp_summary_dir="summary/gffcmp"
 
 mkdir -p "$gffcmp_dir"
 mkdir -p "$log_dir"
-mkdir -p gffcmp_summary
+mkdir -p "$gffcmp_summary_dir"
 
 #reference annotation
 ref_gff=$(realpath "../data/species/$species_name"*/GC*/*GC*.gff)
@@ -58,7 +59,7 @@ gffcompare -r "$ref_gff" "$pred_gff" -o "$prefix"
 #move stats files to summary folders
 shopt -s extglob
 mv "$log_dir"/*.stats "$gffcmp_dir"/
-ln -vf "$gffcmp_dir"/*.stats gffcmp_summary
+ln -vf "$gffcmp_dir"/*.stats "$gffcmp_summary_dir"
 
 echo "done_${species_name}"
 

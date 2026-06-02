@@ -1,63 +1,91 @@
 #!/bin/bash
-# One-off migration: bring existing busco_summary/ entries up to the current standard.
-#   1. rename  busco_summary/<name>.json  ->  busco_summary/<name>_busco.json
-#   2. (re)generate gene + transcript model counts from each species' merged annotation:
-#        busco_summary/<name>_gc.txt  and  busco_summary/<name>_tc.txt
+# One-off migration: bring existing BUSCO summary entries up to the current standard.
+#   - taxon-specific (lineage) jsons  -> summary/busco_lineage/<stem>_Lbusco.json
+#   - eukaryote jsons                 -> summary/busco_eukaryote/<stem>_Ebusco.json
+#   - (re)generate gene + transcript counts -> summary/counts/<stem>_gc.txt / _tc.txt
 #
-# <name> is the json basename, i.e. <species_name>_<taxonID>. The merged annotation is
-# looked up at <species_name>/output/files/merged_<sp>_ann.gff (sp = 2nd field of the name),
-# matching evaluation.sh. Run from the repo root. JSONs are always renamed; counts are
-# skipped (with a warning) when the species' merged annotation is not present.
+# Sources migrated into summary/busco_lineage (treated as lineage results):
+#   - legacy summary/busco/*.json (the single-lineage layout this repo used before)
+#   - any raw summary/busco_lineage/*.json not yet suffixed
+# summary/busco_eukaryote/*.json is migrated in place.
 #
-# Usage: bash scripts/backfill_busco_summary.sh [busco_summary_dir]
+# <stem> is <species_name>_<taxonID>; the taxon id is recovered from
+# <species_name>/srr_select.tsv when the existing filename lacks one. The merged annotation
+# is looked up at <species_name>/output/files/merged_<sp>_ann.gff (sp = 2nd field of the name),
+# matching evaluation.sh. Run from the repo root. JSONs are always renamed; counts are skipped
+# (with a warning) when the merged annotation is absent, and computed at most once per species.
+#
+# Usage: bash scripts/backfill_busco_summary.sh
 
-busco_summary_dir="${1:-busco_summary}"
+counts_dir="summary/counts"
+mkdir -p "$counts_dir"
 
-shopt -s nullglob
-for json in "$busco_summary_dir"/*.json; do
-	base=$(basename "$json" .json)
+#species whose counts were already generated this run (avoid recomputing per lineage)
+declare -A counted
 
-	#skip entries already migrated
-	if [[ "$base" == *_busco ]]; then
-		continue
-	fi
-
-	#split the basename into species_name (+ taxon id, if the name already carries one)
+#canonical_stem <basename> -> sets STEM=<species_name>_<taxonID> and SPECIES_NAME=<species_name>
+canonical_stem() {
+	local base="$1" species taxon
+	#strip an existing _busco suffix left over from an earlier migration
+	base="${base%_busco}"
 	if [[ "$base" =~ ^(.+)_([0-9]+)$ ]]; then
-		species_name="${BASH_REMATCH[1]}"
-		taxonID="${BASH_REMATCH[2]}"
+		species="${BASH_REMATCH[1]}"
+		taxon="${BASH_REMATCH[2]}"
 	else
-		species_name="$base"
-		taxonID=""
+		species="$base"
+		taxon=""
 	fi
-
 	#recover the taxon id from srr_select.tsv when the filename lacks one
-	#(same lookup as evaluation.sh: most repeated id in the taxon column)
-	if [ -z "$taxonID" ] && [ -f "$species_name/srr_select.tsv" ]; then
-		taxonID=$(cut "$species_name/srr_select.tsv" -f4|sort|uniq -c|sort -nr|awk '{print $2}'|head -n1)
+	if [ -z "$taxon" ] && [ -f "$species/srr_select.tsv" ]; then
+		taxon=$(cut "$species/srr_select.tsv" -f4|sort|uniq -c|sort -nr|awk '{print $2}'|head -n1)
 	fi
+	SPECIES_NAME="$species"
+	STEM="${species}_${taxon}"
+	STEM="${STEM%_}"   #drop trailing _ if no taxon could be found
+}
 
-	#canonical stem: <species_name>_<taxonID> (drop the trailing _ if no taxon could be found)
-	stem="${species_name}_${taxonID}"
-	stem="${stem%_}"
-
-	#1. rename to the <stem>_busco.json standard
-	mv -v "$json" "$busco_summary_dir/${stem}_busco.json"
-
-	#2. gene + transcript counts from the merged annotation
-	sp=$(echo "$species_name" | cut -f2 -d"_")
-	merged="$species_name/output/files/merged_${sp}_ann.gff"
-
+generate_counts() {
+	local species="$1" stem="$2"
+	[ -n "${counted[$stem]:-}" ] && return
+	counted[$stem]=1
+	local sp merged gene transcript
+	sp=$(echo "$species" | cut -f2 -d"_")
+	merged="$species/output/files/merged_${sp}_ann.gff"
 	if [ -f "$merged" ]; then
-		gene_count=$(cut -f3 "$merged" | grep -cxF "gene" || true)
-		transcript_count=$(cut -f3 "$merged" | grep -cxE 'transcript|mRNA' || true)
-		echo "$gene_count" > "$busco_summary_dir/${stem}_gc.txt"
-		echo "$transcript_count" > "$busco_summary_dir/${stem}_tc.txt"
-		echo "  $stem -> Gene models: $gene_count | Transcript models: $transcript_count"
+		gene=$(cut -f3 "$merged" | grep -cxF "gene" || true)
+		transcript=$(cut -f3 "$merged" | grep -cxE 'transcript|mRNA' || true)
+		echo "$gene" > "$counts_dir/${stem}_gc.txt"
+		echo "$transcript" > "$counts_dir/${stem}_tc.txt"
+		echo "  $stem -> Gene models: $gene | Transcript models: $transcript"
 	else
-		echo "  $stem -> merged annotation not found at $merged; renamed json, skipped counts"
+		echo "  $stem -> merged annotation not found at $merged; skipped counts"
 	fi
-done
-shopt -u nullglob
+}
+
+#migrate <src_dir> <dest_dir> <suffix>   (suffix is Lbusco or Ebusco)
+migrate() {
+	local src="$1" dest="$2" suffix="$3"
+	[ -d "$src" ] || return
+	mkdir -p "$dest"
+	shopt -s nullglob
+	for json in "$src"/*.json; do
+		base=$(basename "$json" .json)
+		#skip entries already at the target standard
+		[[ "$base" == *_"$suffix" ]] && continue
+		canonical_stem "$base"
+		mv -v "$json" "$dest/${STEM}_${suffix}.json"
+		generate_counts "$SPECIES_NAME" "$STEM"
+	done
+	shopt -u nullglob
+}
+
+#lineage: legacy summary/busco first, then any raw files already in summary/busco_lineage
+migrate "summary/busco"          "summary/busco_lineage"   "Lbusco"
+migrate "summary/busco_lineage"  "summary/busco_lineage"   "Lbusco"
+#eukaryote: in place
+migrate "summary/busco_eukaryote" "summary/busco_eukaryote" "Ebusco"
+
+#remove the now-empty legacy dir if everything moved out
+rmdir summary/busco 2>/dev/null && echo "Removed empty legacy summary/busco"
 
 echo "Backfill complete."
