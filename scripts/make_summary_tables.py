@@ -17,7 +17,7 @@ The shared key in every table is the bare species name (Genus_species[_extra]):
 counts/busco stems drop the trailing _<taxonID>; gffcompare names drop the -Lycmp suffix.
 
 Run from the repo root (needs pandas; run inside the buscomania conda env):
-    python3 scripts/summarize.py
+    python3 scripts/make_summary_tables.py
 """
 
 import os
