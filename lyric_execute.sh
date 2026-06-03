@@ -19,9 +19,11 @@ mkdir -p logs
 
 #1.Set up the species and submit the download
 echo "=== Stage 1: lyric_template.sh ($species_name) ==="
-template_out=$(bash lyric_template.sh "$species_name" "$longread_db")
-echo "$template_out"
-dl_jobid=$(printf '%s\n' "$template_out" | sed -n 's/^DOWNLOAD_JOBID=//p' | tail -1)
+#stream lyric_template.sh output live to the shell while capturing it to extract the job id
+template_log=$(mktemp)
+bash lyric_template.sh "$species_name" "$longread_db" 2>&1 | tee "$template_log"
+dl_jobid=$(sed -n 's/^DOWNLOAD_JOBID=//p' "$template_log" | tail -1)
+rm -f "$template_log"
 
 #2. Run the pipeline once the downloads finish.(from species_name dir)
 echo "=== Stage 2: runner.sh ==="

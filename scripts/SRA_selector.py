@@ -43,8 +43,8 @@ def keyword_extraction(description, keyword_list):
     #none match
     return ["Unspecified"]
 
-def is_size_valid(srr_id, max_gb):
-    """Checks if the SRR file size is within the allowed limit using vdb-dump."""
+def get_size_gb(srr_id):
+    """Returns the SRR file size in GB using vdb-dump, or None if it can't be determined."""
     try:
         result = subprocess.run(['vdb-dump', srr_id, '--info'], capture_output=True, text=True, timeout=15)
         for line in result.stdout.split('\n'):
@@ -53,37 +53,62 @@ def is_size_valid(srr_id, max_gb):
                 size_str = line.split(':')[-1].strip()
                 # Remove any commas or spaces just in case
                 clean_size = re.sub(r'[, ]', '', size_str)
-                
+
                 if clean_size.isdigit():
                     size_bytes = int(clean_size)
                     size_gb = size_bytes / (1024**3)
                     print(f"Size for {srr_id}: {size_gb} GB")
-                    return size_gb <= max_gb
+                    return size_gb
     except Exception as e:
-        print(f"Warning: Could not determine size for {srr_id} ({e}). Assuming invalid.")
-        return False
-    return False   
+        print(f"Warning: Could not determine size for {srr_id} ({e}).")
+        return None
+    return None
 
 
 
-def sra_for_annotation(df, topReads=1, max_gb=9999999999999999.0):
+def log_no_sra(species_label, candidates, error_file):
+    """Append [Species, SRA, size] rows to the error file when no SRA survived the filters."""
+    with open(error_file, "a") as fh:
+        if candidates.empty:
+            fh.write(f"{species_label}\tNA\tNA\n")
+            return
+        for _, row in candidates.iterrows():
+            size_str=f"{row['Size_GB']:.2f}" if pd.notna(row["Size_GB"]) else "NA"
+            fh.write(f"{row['Species']}\t{row['SRA_id']}\t{size_str}\n")
+
+def sra_for_annotation(df, topReads=1, max_gb=9999999999999999.0, error_file=None):
     """Takes SRA with n top most reads per each Platform, tissue and developement stage of a particular species"""
+    out_cols=["SRA_id", "Description", "Tissue_stage", "TaxonID", "Lineage", "Species", "Source", "Strategy", "Platform", "Read_count", "Date"]
+
+    #species label for error logging, captured before any filtering can empty the frame
+    species_label=str(df["Species"].iloc[0]) if not df.empty else "Unknown"
+
     #Source selection, single cell tends to be worse
     df=df[df["Source"].str.contains("TRANSCRIPTOMIC", case=False, na=False)].reset_index(drop=True)
+
+    #failsafe: no TRANSCRIPTOMIC SRA, log the species (no candidates to size) and return empty
+    if df.empty:
+        print("No TRANSCRIPTOMIC SRA found. Returning empty selection.")
+        if error_file:
+            log_no_sra(species_label, pd.DataFrame(columns=["Species", "SRA_id", "Size_GB"]), error_file)
+        return pd.DataFrame(columns=out_cols)
 
     #clean SRA id(keep only ID)
     df[["Exp_id", "SRA_id"]]=df["SRA_id"].str.split(":", n=1, expand=True)
 
     #remove srrs with huge filesize
     print(f"Evaluating {len(df)} SRA ids against the {max_gb} GB size limit.")
-    valid_size_mask=df["SRA_id"].apply(lambda srr: is_size_valid(srr, max_gb)) #evaluate srrs
+    df["Size_GB"]=df["SRA_id"].apply(get_size_gb) #evaluate srrs
+    candidates=df[["Species", "SRA_id", "Size_GB"]].copy() #keep for error logging
+    valid_size_mask=df["Size_GB"].apply(lambda s: s is not None and s <= max_gb)
     df=df[valid_size_mask].reset_index(drop=True) #select
     print(f"Candidates remaining after size filtering: {len(df)}")
 
-    #failsafe: no SRA survived the filters, return empty result so empty files are written
-    out_cols=["SRA_id", "Description", "Tissue_stage", "TaxonID", "Lineage", "Species", "Source", "Strategy", "Platform", "Read_count", "Date"]
+    #failsafe: no SRA survived the filters, log candidates and return empty so empty files are written
     if df.empty:
         print("No SRA passed the filters. Returning empty selection.")
+        if error_file:
+            log_no_sra(species_label, candidates, error_file)
         return pd.DataFrame(columns=out_cols)
 
     #get keywords
@@ -113,6 +138,7 @@ def main():
     parser.add_argument("-s", "--srr_id", type=str, help="Path to save the SRR indexes to a TSV file.")
     parser.add_argument("-t", "--topReads", type=int, default=2, help="Optional: Number of top SRA runs to select per group (default is 2).")
     parser.add_argument("-m", "--max_size", type=float, default=9999999999999999.0, help="Optional: Maximum file size in GB (if none is provided all are accepted).")
+    parser.add_argument("-e", "--error_file", type=str, help="Optional: Path to append [Species, SRA, size] rows when no SRA pass the filters.")
 
     args=parser.parse_args()
 
@@ -121,7 +147,7 @@ def main():
     data=pd.read_csv(args.input, sep="\t", header=None, names=colnames)
 
     #get best sra
-    best_sra=sra_for_annotation(data, topReads=args.topReads, max_gb=args.max_size)
+    best_sra=sra_for_annotation(data, topReads=args.topReads, max_gb=args.max_size, error_file=args.error_file)
     best_sra.to_csv(args.output, sep="\t", index=False, header=False)
     print(f"Saved SRA experiments({best_sra.shape[0]}) at {args.output}.")
 
