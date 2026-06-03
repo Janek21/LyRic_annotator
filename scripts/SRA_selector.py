@@ -80,6 +80,12 @@ def sra_for_annotation(df, topReads=1, max_gb=9999999999999999.0):
     df=df[valid_size_mask].reset_index(drop=True) #select
     print(f"Candidates remaining after size filtering: {len(df)}")
 
+    #failsafe: no SRA survived the filters, return empty result so empty files are written
+    out_cols=["SRA_id", "Description", "Tissue_stage", "TaxonID", "Lineage", "Species", "Source", "Strategy", "Platform", "Read_count", "Date"]
+    if df.empty:
+        print("No SRA passed the filters. Returning empty selection.")
+        return pd.DataFrame(columns=out_cols)
+
     #get keywords
     current_specie=df["Species"].iloc[0]
     keywords=get_species_keywords(current_specie)
@@ -94,7 +100,7 @@ def sra_for_annotation(df, topReads=1, max_gb=9999999999999999.0):
     #select 1rst SRA(most reads) for platform and each tissue/stage
     best=sorted_df.groupby(["Platform", "Tissue_stage"]).head(topReads).reset_index(drop=True) #top reads are adjustable
     
-    best=best[["SRA_id", "Description", "Tissue_stage", "TaxonID", "Lineage", "Species", "Source", "Strategy", "Platform", "Read_count", "Date"]]
+    best=best[out_cols]
     
     return best
 
