@@ -34,7 +34,7 @@ run_jobid=$(sbatch --parsable \
 	--qos=normal \
 	--cpus-per-task=4 \
 	--mem=24G \
-	--time=300 \
+	--time=400 \
 	--output="logs/%x_%j.out" \
 	--error="logs/%x_%j.err" \
 	"$species_name/runner.sh")
