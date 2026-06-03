@@ -18,8 +18,8 @@ rm -rf "$tmp_files"
 mkdir -p "$tmp_files"
 
 #per-task AGAT config so parallel jobs don't collide on agat_config.yaml
-agat_cfg="$tmp_files/agat_${sp}_${SLURM_ARRAY_TASK_ID:-$$}.yaml"
-agat config --expose --output "$agat_cfg" >/dev/null 2>&1
+agat_cfg="$tmp_files/agat_${species_name}_${SLURM_ARRAY_TASK_ID:-$$}.yaml"
+agat config --expose --no-log --output "$agat_cfg" >/dev/null 2>&1
 trap 'rm -f "$agat_cfg"' EXIT
 
 ##decompressions
@@ -79,19 +79,25 @@ if ! [[ "$gcode" =~ ^[0-9]+$ ]]; then
 fi
 echo "Translation table for $taxonID: $gcode"
 
-#i# transform to proteins (sequences with premature stops or frameshifts will be translated exactly as your in gff3+computationally better)
+#transform to proteins (sequences with premature stops or frameshifts will be translated exactly as your in gff3+computationally better)
+
+#ensure files are generated in particular folders(no naming clash)
+td_work="$tmp_files/transdecoder_work"
+mkdir -p "$td_work"
+transcripts_abs="$(realpath "$tmp_files/transcripts_$sp.fa")"
+
 #generate transcriptome with gffread
-gffread "$tmp_files/longest_${sp}_ann.gff" -g ../data/species/"$species_name"*/GC*/GC*.fna -w "$tmp_files/transcripts_$sp.fa"
+gffread "$tmp_files/longest_${sp}_ann.gff" -g ../data/species/"$species_name"*/GC*/GC*.fna -w "$transcripts_abs"
 
-#Find ORFs in transcripts
-TD2.LongOrfs -t "$tmp_files/transcripts_$sp.fa" -O "$tmp_files/transdecoder_work" -G "$gcode"
+(cd "$td_work" && #move to folder for TD2 execution ONLY
+	#Find ORFs in transcripts
+	TD2.LongOrfs -t "$transcripts_abs" -O . -G "$gcode"
+	#Select most probable ORFs to create proteins
+	TD2.Predict -t "$transcripts_abs" -O . -G "$gcode" #-O is output of ORFs
+)
 
-#Select most probable ORFs to create proteins
-TD2.Predict -t "$tmp_files/transcripts_$sp.fa" -O "$tmp_files/transdecoder_work" -G "$gcode" #-O is output of ORFs
-
-#move TD2 files to correct folders(as prot and to log)
-mv "./transcripts_$sp.fa.TD2.pep" "$tmp_files/prot_$sp.fa"
-mv ./*.fa.TD2.* "$tmp_files/transdecoder_work"
+#move TD2 prot files to correct folders
+mv "$td_work/transcripts_$sp.fa.TD2.pep" "$tmp_files/prot_$sp.fa"
 
 echo "TransDecoder proteins in $tmp_files/prot_$sp.fa"
 
