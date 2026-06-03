@@ -32,9 +32,9 @@ run_jobid=$(sbatch --parsable \
 	--chdir="$species_name" \
 	--dependency=afterok:"$dl_jobid" \
 	--qos=normal \
-	--cpus-per-task=4 \
-	--mem=24G \
-	--time=400 \
+	--cpus-per-task=6 \
+	--mem=36G \
+	--time=500 \
 	--output="logs/%x_%j.out" \
 	--error="logs/%x_%j.err" \
 	"$species_name/runner.sh")
@@ -43,13 +43,13 @@ echo "Pipeline submitted: job $run_jobid"
 #3. Evaluate once the pipeline finishes (evaluation.sh runs from the repo root).
 echo "=== Stage 3: evaluation.sh ==="
 ev_jobid=$(sbatch --parsable \
-	--job-name="lyric_eval_${sp}" \
+	--job-name="eval_ly_${sp}" \
 	--dependency=afterok:"$run_jobid" \
 	--cpus-per-task=4 \
 	--mem=12G \
 	--time=90 \
-	--output="logs/%x_%j.out" \
-	--error="logs/%x_%j.err" \
+	--output="logs/eval/%x_%j.out" \
+	--error="logs/eval/%x_%j.err" \
 	evaluation.sh "$species_name" "$busco_db")
 echo "Evaluation submitted: job $ev_jobid (starts after job $run_jobid)"
 

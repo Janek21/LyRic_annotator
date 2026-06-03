@@ -67,11 +67,8 @@ echo "      Gene models: $gene_count | Transcript models: $transcript_count"
 agat_sp_keep_longest_isoform.pl --gff "$tmp_files/merged_${sp}_ann.gff" --config "$agat_cfg" --out "$tmp_files/longest_${sp}_ann.gff"
 echo "Found longest isoforms."
 
-#resolve the NCBI nuclear genetic code for this taxon. gffread only extracts
-#nucleotide transcripts (table-independent); the translation table matters at
-#the ORF step, so it is passed to TransDecoder. Non-standard codes (e.g.
-#ciliates like Paramecium/Tetrahymena use table 6, where TAA/TAG code for Gln,
-#not stop) would otherwise be mistranslated under the default table 1.
+#resolve the NCBI nuclear genetic code for this taxon (codon table for on-standard cases)
+echo "KEY: $NCBI_API_KEY"
 gcode=$(python3 scripts/get_genetic_code.py -e "ibdyjsayzcllkyvjkc@nespf.com" -k "${NCBI_API_KEY:-}" -t "$taxonID" 2>/dev/null)
 if ! [[ "$gcode" =~ ^[0-9]+$ ]]; then
 	echo ">Could not resolve genetic code for taxon $taxonID; defaulting to table 1."
@@ -112,8 +109,8 @@ sbatch \
 	--job-name="busco_${sp}" \
 	--cpus-per-task=4 \
 	--mem=16G \
-	--output="logs/%x_%j.out" \
-	--error="logs/%x_%j.err" \
+	--output="logs/eval/busco/%x_%j.out" \
+	--error="logs/eval/busco/%x_%j.err" \
 	--time=60 \
 	scripts/busco_evaluation.sh "$species_name" "$busco_db"
 
@@ -122,8 +119,8 @@ sbatch \
 	--job-name="gffcmp_${sp}" \
 	--cpus-per-task=2 \
 	--mem=4G \
-	--output="logs/%x_%j.out" \
-	--error="logs/%x_%j.err" \
+	--output="logs/eval/gffcmp/%x_%j.out" \
+	--error="logs/eval/gffcmp/%x_%j.err" \
 	--time=10 \
 	scripts/gffcompare_evaluation.sh "$species_name"
 

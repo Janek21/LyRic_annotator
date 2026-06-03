@@ -28,7 +28,18 @@ fi
 echo "$search_res" > "$species_name/full_srr.tsv"
 #select best SRRs
 python3 scripts/SRA_selector.py -i "$species_name/full_srr.tsv" -o "$species_name/srr_select.tsv" -s "$srr_list" -t 15 -m 8
-echo "Selected SRA are $(wc -l $species_name/srr_select.tsv)"
+
+#if nothing survived the filtering, record the failure, clean up and abort this species
+srr_count=$(wc -l < "$species_name/srr_select.tsv")
+if [ "$srr_count" -eq 0 ]; then
+	had_count=$(grep -c . "$species_name/full_srr.tsv" 2>/dev/null || echo 0)
+	printf '%s\t%s\n' "$species_name" "$had_count" >> error_species.txt
+	echo "No SRA selected for $species_name (original: $had_count); logged to error_species.txt. Removing $species_name and aborting."
+	rm -rf "$species_name"
+	exit 1
+fi
+echo "Selected SRA are $srr_count"
+
 
 #Modify git for the current species and samples
 shortname=$(python3 scripts/LyRic_setup.py shortname -s "$species_name")
@@ -63,8 +74,8 @@ array_max=$((srr_count - 1))
 
 dl_jobid=$(sbatch --parsable \
 	--job-name="srr_download_${sp}" \
-	--output="logs/%x.%A_%a.out" \
-	--error="logs/%x.%A_%a.err" \
+	--output="logs/dw/%x_%A.%a.out" \
+	--error="logs/dw/%x_%A.%a.err" \
 	--array=0-${array_max} \
 	scripts/srr_dw.sh "$species_name")
 echo "Download array submitted: job $dl_jobid"

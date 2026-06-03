@@ -3,12 +3,12 @@
 #SBATCH --output=logs/%x.%A_%a.out
 #SBATCH --error=logs/%x.%A_%a.err
 
-#SBATCH --job-name=isoq_launcher
+#SBATCH --job-name=lyric_launcher
 
 #SBATCH --qos=normal
-#SBATCH --time=30
+#SBATCH --time=60
 
-#SBATCH --mem=2G
+#SBATCH --mem=8G
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
