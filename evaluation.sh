@@ -17,6 +17,11 @@ lyric_out="$species_name/output/mappings/mergedReads"
 rm -rf "$tmp_files"
 mkdir -p "$tmp_files"
 
+#per-task AGAT config so parallel jobs don't collide on agat_config.yaml
+agat_cfg="$tmp_files/agat_${sp}_${SLURM_ARRAY_TASK_ID:-$$}.yaml"
+agat config --expose --output "$agat_cfg" >/dev/null 2>&1
+trap 'rm -f "$agat_cfg"' EXIT
+
 ##decompressions
 #decompress gffs
 find "$lyric_out" -type f -name "ont_*.gz"|xargs -r -P $(nproc) unpigz -df  #$(nproc) unpigz -df #"$SLURM_CPUS_PER_TASK" unpigz -df
@@ -42,7 +47,7 @@ if [ "$file_count" -eq 1 ]; then
 	echo "Copied files at $tmp_files/merged_${sp}_ann.gff"
 else
 	#merge gffs
-	agat_sp_merge_annotations.pl --gff "$lyric_out" --out "$tmp_files/merged_${sp}_ann.gff"
+	agat_sp_merge_annotations.pl --gff "$lyric_out" --config "$agat_cfg" --out "$tmp_files/merged_${sp}_ann.gff"
 	echo "Merged files at $tmp_files/merged_${sp}_ann.gff"
 fi
 
@@ -59,18 +64,30 @@ echo "$transcript_count" > "$counts_dir/${species_name}_${taxonID}_tc.txt"
 echo "      Gene models: $gene_count | Transcript models: $transcript_count"
 
 #get longest isoform
-agat_sp_keep_longest_isoform.pl --gff "$tmp_files/merged_${sp}_ann.gff" --out "$tmp_files/longest_${sp}_ann.gff"
+agat_sp_keep_longest_isoform.pl --gff "$tmp_files/merged_${sp}_ann.gff" --config "$agat_cfg" --out "$tmp_files/longest_${sp}_ann.gff"
 echo "Found longest isoforms."
+
+#resolve the NCBI nuclear genetic code for this taxon. gffread only extracts
+#nucleotide transcripts (table-independent); the translation table matters at
+#the ORF step, so it is passed to TransDecoder. Non-standard codes (e.g.
+#ciliates like Paramecium/Tetrahymena use table 6, where TAA/TAG code for Gln,
+#not stop) would otherwise be mistranslated under the default table 1.
+gcode=$(python3 scripts/get_genetic_code.py -e "ibdyjsayzcllkyvjkc@nespf.com" -k "${NCBI_API_KEY:-}" -t "$taxonID" 2>/dev/null)
+if ! [[ "$gcode" =~ ^[0-9]+$ ]]; then
+	echo ">Could not resolve genetic code for taxon $taxonID; defaulting to table 1."
+	gcode=1
+fi
+echo "Translation table for $taxonID: $gcode"
 
 #i# transform to proteins (sequences with premature stops or frameshifts will be translated exactly as your in gff3+computationally better)
 #generate transcriptome with gffread
 gffread "$tmp_files/longest_${sp}_ann.gff" -g ../data/species/"$species_name"*/GC*/GC*.fna -w "$tmp_files/transcripts_$sp.fa"
 
 #Find ORFs in transcripts
-TD2.LongOrfs -t "$tmp_files/transcripts_$sp.fa" -O "$tmp_files/transdecoder_work"
+TD2.LongOrfs -t "$tmp_files/transcripts_$sp.fa" -O "$tmp_files/transdecoder_work" -G "$gcode"
 
 #Select most probable ORFs to create proteins
-TD2.Predict -t "$tmp_files/transcripts_$sp.fa" -O "$tmp_files/transdecoder_work" #-O is output of ORFs
+TD2.Predict -t "$tmp_files/transcripts_$sp.fa" -O "$tmp_files/transdecoder_work" -G "$gcode" #-O is output of ORFs
 
 #move TD2 files to correct folders(as prot and to log)
 mv "./transcripts_$sp.fa.TD2.pep" "$tmp_files/prot_$sp.fa"
