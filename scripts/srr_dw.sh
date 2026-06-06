@@ -13,18 +13,18 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 
+start_time=$(date +%s)
 echo ">STARTING at $(date)"
 
 set -euo pipefail
 
 species_name="$1"
-cd "$species_name"
 
-out_dir="data/fastq"
+out_dir="$species_name/data/fastq"
 mkdir -p "$out_dir"
 
 # accession for this array task (line SLURM_ARRAY_TASK_ID + 1)
-SRRid=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" srr_list.tsv)
+SRRid=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$species_name/srr_list.tsv")
 
 if [ -z "$SRRid" ]; then
 	echo "ERROR: no accession at index $SLURM_ARRAY_TASK_ID in $species_name/srr_list.tsv"
@@ -33,25 +33,29 @@ fi
 
 result_file="$out_dir/ont_HpreCap_0+_$SRRid.fastq.gz"
 
-if [ -f "$result_file" ]; then #check if file has already been downloaded
+if [ -s "$result_file" ]; then #check if file has already been downloaded
 	echo "Skipping $SRRid: $result_file already exists."
 else
 	echo "--- Processing $SRRid ---"
 
-	#Resolve the FASTQ FTP URL from ENA (returns paths without ftp:// prefix)
-	FTP_URL=$(curl -sf "https://www.ebi.ac.uk/ena/portal/api/filereport?accession=${SRRid}&result=read_run&fields=fastq_ftp" \
-		| tail -n +2 | cut -f2 | tr ';' '\n' | head -1)
+	#Resolve the FASTQ URL from ENA (returns paths without a scheme prefix)
+	ftp_url=$(curl -sf "https://www.ebi.ac.uk/ena/portal/api/filereport?accession=${SRRid}&result=read_run&fields=fastq_ftp" | tail -n +2 | cut -f2 | tr ';' '\n' | head -1)
 
-	if [ -z "$FTP_URL" ]; then
+	if [ -z "$ftp_url" ]; then
 		echo "Error: could not retrieve FTP URL for $SRRid from ENA."
 		exit 1
 	fi
 
-	#Download to a temp file, move on success (avoids leaving a partial file that
-	#the skip-check above would mistake for a finished download)
+	#Download to a temp file first (avoids leaving a partial file that the skip-check above would mistake for a finished download)
 	tmp_file="$out_dir/$SRRid.fastq.gz.part"
-	wget -q -O "$tmp_file" "ftp://${FTP_URL}"
-	mv "$tmp_file" "$result_file"
+	wget -q --tries=5 --waitretry=60 --random-wait --timeout=120 -O "$tmp_file" "https://${ftp_url}"
+
+	#Uniquify read IDs while writing the final file, LyRic is finnicky with that
+	#Some SRA fastqs reuse the spot accessions
+	uniq_file="$out_dir/$SRRid.fastq.gz.uniq"
+	zcat "$tmp_file" | awk 'NR%4==1{id=$1; if(++seen[id]>1){$1=id"_"seen[id]}} {print}' | gzip > "$uniq_file"
+	mv "$uniq_file" "$result_file"
+	rm -f "$tmp_file"
 	echo "Complete: new file is $result_file"
 fi
 
@@ -65,4 +69,6 @@ if [ -f "/sys/fs/cgroup$cgroup_dir/memory.peak" ]; then
 fi
 
 # Record end
+elapsed_time=$(( $(date +%s) - start_time ))
+echo "It takes $((elapsed_time / 60)) minutes"
 echo ">ENDING at $(date)"
