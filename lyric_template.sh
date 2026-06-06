@@ -51,6 +51,11 @@ echo "Decompressed genome and reference anotation files."
 python3 scripts/LyRic_setup.py config -s "$species_name" -o "$species_name/config/default.yaml"
 #copy and compress the genome sequence
 python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$species_name"*/GC*/GC*_genomic.fna -o "$species_name/data/fasta/$shortname.fa.gz"
+#the genome must be a valid gzip, otherwise the pipeline later dies with 'not in gzip format'
+if ! gzip -t "$species_name/data/fasta/$shortname.fa.gz" 2>/dev/null; then
+	echo "Genome $shortname.fa.gz missing or not valid gzip for $species_name; aborting."
+	exit 1
+fi
 #copy the genome annotation
 python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$species_name"*/GC*/"$species_name"*GC*.gff -o "$species_name/data/input/Annotation.gff"
 #if no annotation was produced, find the closest related species that has one

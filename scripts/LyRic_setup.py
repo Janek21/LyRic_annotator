@@ -52,20 +52,18 @@ def filetransfer(species, file_origin, file_out): #for annotation and fasta
         print(f"Warning: {file_origin} not found.")
         return
 
-    #copy genome fasta from remot location to local
-    shutil.copy(file_origin, file_out)
-
     #compress file
     if file_out[-3:]==".gz":
 
         gz_out=f"{file_out}.alt" #.alt for identifying the commpressed
-        with open(file_out, "rb") as f_in:
+        with open(file_origin, "rb") as f_in: #read straight from the origin, never write plain bytes to file_out
             with gzip.open(gz_out, "wb") as f_comp:
                 shutil.copyfileobj(f_in, f_comp)
-        os.remove(file_out) #remove non-compressed
-        
-        os.rename(gz_out, file_out) #remove .alt from name
-    
+        os.rename(gz_out, file_out) #only the fully compressed file ever lands on the .gz name
+    else:
+        #copy genome fasta from remot location to local
+        shutil.copy(file_origin, file_out)
+
     print(f"[Step 2] Created {file_origin} at: {file_out}")
 
 ### Step 3: Fill Sample Annotations
