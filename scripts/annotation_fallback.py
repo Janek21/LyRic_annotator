@@ -10,6 +10,7 @@ directory as Annotation.gff.
 import os
 import sys
 import csv
+import gzip
 import glob
 import shutil
 import argparse
@@ -193,7 +194,15 @@ def main() -> None:
         sys.exit(1)
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    shutil.copy(gff, out_path)
+    if gff.endswith(".gz"):
+        #decompress a gzipped source onto the plain Annotation.gff name
+        tmp_out = f"{out_path}.alt"
+        with gzip.open(gff, "rb") as f_in:
+            with open(tmp_out, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        os.rename(tmp_out, out_path)
+    else:
+        shutil.copy(gff, out_path)
     
     # Print the copy operation details
     print(f"\nCopied annotation from: {gff}")

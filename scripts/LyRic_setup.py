@@ -60,6 +60,13 @@ def filetransfer(species, file_origin, file_out): #for annotation and fasta
             with gzip.open(gz_out, "wb") as f_comp:
                 shutil.copyfileobj(f_in, f_comp)
         os.rename(gz_out, file_out) #only the fully compressed file ever lands on the .gz name
+    elif file_origin[-3:]==".gz":
+        #decompress a gzipped source onto the plain output name
+        plain_out=f"{file_out}.alt" #.alt while decompressing, never expose a partial plain file
+        with gzip.open(file_origin, "rb") as f_in: #read the gz source, write plain bytes
+            with open(plain_out, "wb") as f_plain:
+                shutil.copyfileobj(f_in, f_plain)
+        os.rename(plain_out, file_out) #only the fully decompressed file lands on the final name
     else:
         #copy genome fasta from remot location to local
         shutil.copy(file_origin, file_out)

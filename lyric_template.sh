@@ -43,21 +43,18 @@ echo "Selected SRA are $srr_count"
 #Modify git for the current species and samples
 shortname=$(python3 scripts/LyRic_setup.py shortname -s "$species_name")
 
-#decompress files if any remain compressed
-find ../data/species/"$species_name"*/GC* -type f -name "*GC*.gz"|xargs -r -P $(nproc) unpigz -df
-echo "Decompressed genome and reference anotation files."
-
 #config.default.yaml, per the species name
 python3 scripts/LyRic_setup.py config -s "$species_name" -o "$species_name/config/default.yaml"
-#copy and compress the genome sequence
-python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$species_name"*/GC*/GC*_genomic.fna -o "$species_name/data/fasta/$shortname.fa.gz"
-#the genome must be a valid gzip, otherwise the pipeline later dies with 'not in gzip format'
-if ! gzip -t "$species_name/data/fasta/$shortname.fa.gz" 2>/dev/null; then
-	echo "Genome $shortname.fa.gz missing or not valid gzip for $species_name; aborting."
+#decompress the genome sequence into the working dir (sources in ../data/species stay gzipped)
+python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$species_name"*/GC*/GC*_genomic.fna.gz -o "$species_name/data/fasta/$shortname.fa"
+#the genome must be a non-empty FASTA, otherwise the pipeline later dies on indexing
+genome_fa="$species_name/data/fasta/$shortname.fa"
+if [ ! -s "$genome_fa" ] || [ "$(head -c1 "$genome_fa")" != ">" ]; then
+	echo "Genome $shortname.fa missing or not a valid FASTA for $species_name; aborting."
 	exit 1
 fi
-#copy the genome annotation
-python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$species_name"*/GC*/"$species_name"*GC*.gff -o "$species_name/data/input/Annotation.gff"
+#copy the genome annotation (decompresses the gzipped source onto the plain Annotation.gff)
+python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$species_name"*/GC*/"$species_name"*GC*.gff.gz -o "$species_name/data/input/Annotation.gff"
 #if no annotation was produced, find the closest related species that has one
 python3 scripts/annotation_fallback.py -s "$species_name" -d "$longread_protists_db" -r "../data/species" -o "$species_name/data/input/Annotation.gff"
 #set up the sample annotations

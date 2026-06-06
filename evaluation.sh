@@ -25,8 +25,7 @@ trap 'rm -f "$agat_cfg"' EXIT
 ##decompressions
 #decompress gffs
 find "$lyric_out" -type f -name "ont_*.gz"|xargs -r -P $(nproc) unpigz -df  #$(nproc) unpigz -df #"$SLURM_CPUS_PER_TASK" unpigz -df
-#decompress fna if they are compressed still
-find ../data/species/"$species_name"*/GC* -type f -name "GC*_genomic.fna.gz"|xargs -r -P $(nproc) unpigz -df  #$(nproc) unpigz -df #"$SLURM_CPUS_PER_TASK" unpigz -df
+#genome stays gzipped in ../data/species; the uncompressed copy in data/fasta is used instead
 
 #rename for long file names
 #Removes the prefix and sufix and replaces it with nothing ('')
@@ -83,8 +82,9 @@ td_work="$tmp_files/transdecoder_work"
 mkdir -p "$td_work"
 transcripts_abs="$(realpath "$tmp_files/transcripts_$sp.fa")"
 
-#generate transcriptome with gffread
-gffread "$tmp_files/longest_${sp}_ann.gff" -g ../data/species/"$species_name"*/GC*/GC*.fna -w "$transcripts_abs"
+#generate transcriptome with gffread, using the uncompressed genome copied into the species dir
+shortname=$(python3 scripts/LyRic_setup.py shortname -s "$species_name")
+gffread "$tmp_files/longest_${sp}_ann.gff" -g "$species_name/data/fasta/$shortname.fa" -w "$transcripts_abs"
 
 (cd "$td_work" && #move to folder for TD2 execution ONLY
 	#Find ORFs in transcripts
