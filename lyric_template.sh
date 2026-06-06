@@ -62,8 +62,6 @@ python3 scripts/LyRic_setup.py annotate_config -s "$species_name" -i "$srr_list"
 mkdir -p "$species_name/data/input"
 touch "$species_name/data/input/fakeCAGE.bed" "$species_name/data/input/fakeDHS.bed"
 
-cp scripts/runner.sh "$species_name/runner.sh"
-
 mkdir -p "$species_name/data/fastq"
 #cp scripts/srr_dw.sh $species_name
 

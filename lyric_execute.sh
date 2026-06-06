@@ -25,21 +25,20 @@ bash lyric_template.sh "$species_name" "$longread_db" 2>&1 | tee "$template_log"
 dl_jobid=$(sed -n 's/^DOWNLOAD_JOBID=//p' "$template_log" | tail -1)
 rm -f "$template_log"
 
-#2. Run the pipeline once the downloads finish.(from species_name dir)
+#2. Run the pipeline once the downloads finish (runs from the repo root, targets the species dir).
 echo "=== Stage 2: runner.sh ==="
-mkdir -p "$species_name/logs"
+mkdir -p logs/run
 echo "runner.sh will start after download job $dl_jobid"
 run_jobid=$(sbatch --parsable \
 	--job-name="lyric_${sp}" \
-	--chdir="$species_name" \
 	--dependency=afterok:"$dl_jobid" \
 	--qos=normal \
 	--cpus-per-task=6 \
 	--mem=36G \
 	--time=500 \
-	--output="logs/%x_%j.out" \
-	--error="logs/%x_%j.err" \
-	"$species_name/runner.sh")
+	--output="logs/run/%x_%j.out" \
+	--error="logs/run/%x_%j.err" \
+	scripts/runner.sh "$species_name")
 echo "Pipeline submitted: job $run_jobid"
 
 #3. Evaluate once the pipeline finishes (evaluation.sh runs from the repo root).

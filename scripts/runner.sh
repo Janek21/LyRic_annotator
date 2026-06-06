@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output=logs/%x_%j.out
-#SBATCH --error=logs/%x_%j.err
+#SBATCH --output=logs/run/%x_%j.out
+#SBATCH --error=logs/run/%x_%j.err
 #SBATCH --qos=normal
 #SBATCH --job-name=lyric
 
@@ -22,8 +22,13 @@ module load Python/3.13.5-GCCcore-14.3.0
 source ~/bin/snakemake/bin/activate
 cpus="${SLURM_CPUS_PER_TASK:-2}"
 
-snakemake --unlock
-snakemake --cores $cpus --configfile config/default.yaml --keep-going
+#run from the repo root, pointing snakemake at the species clone
+species_name="$1"
+species_dir="$(realpath "$species_name")"
+echo "Running LyRic for $species_name"
+
+snakemake --snakefile "$species_dir/workflow/Snakefile" --directory "$species_dir" --configfile "$species_dir/config/default.yaml" --unlock
+snakemake --snakefile "$species_dir/workflow/Snakefile" --directory "$species_dir" --configfile "$species_dir/config/default.yaml" --cores $cpus --keep-going
 
 #record memory usage
 cgroup_dir=$(awk -F: '{print $NF}' /proc/self/cgroup)
