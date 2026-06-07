@@ -120,6 +120,16 @@ busco -m protein -i "$prot_file" --download_path "$busco_db" -l "$euk_lineage" -
 euk_json="$busco_euk_dir/${species_name}_${taxonID}_Ebusco.json"
 mv "$res_euk"/*.json "$euk_json"
 
+#merged-with-reference annotation relocated to summary/, hardlinked back to the species location
+#(canonical inode lives in summary/merge/pred so the species folder can be removed safely)
+pred_dir="$merge_summary_dir/pred"
+mkdir -p "$pred_dir"
+pred_dest="$pred_dir/${species_name}_${taxonID}_mergedRef.gff"
+rm -f "$pred_dest"                 #refresh on reruns
+mv "$merged_ref" "$pred_dest"     #relocate the merged annotation into the central summary tree
+ln "$pred_dest" "$merged_ref"     #link it back so the original species location stays valid
+echo "Merged-with-reference annotation collected into $pred_dir/"
+
 rm -rf agat_log_*
 echo "Analysis completed!"
 echo ">ENDING at $(date)"
