@@ -28,11 +28,16 @@ find "$lyric_out" -type f -name "ont_*.gz"|xargs -r -P $(nproc) unpigz -df  #$(n
 #genome stays gzipped in ../data/species; the uncompressed copy in data/fasta is used instead
 
 #rename for long file names
-#Removes the prefix and sufix and replaces it with nothing ('')
+#Removes the prefix and sufix(minNreads (N varies)) and replaces it with nothing ('')
 rename "ont_HpreCap_0+_" "" "$lyric_out"/ont_HpreCap_0+_[DSE]RR*.gff
-rename ".HiSS.tmerge.min2reads.splicing_status-all.endSupport-all" "" "$lyric_out"/*.gff
+rename 's/\.HiSS\.tmerge\.min[0-9]+reads\.splicing_status-all\.endSupport-all//' "$lyric_out"/*.gff
 
-#detect number of files in folder(if 1 only ,dont merge)
+#for f in "$lyric_out"/*.gff; do
+#	new=$(echo "$f" | sed -E 's/\.HiSS\.tmerge\.min[0-9]+reads\.splicing_status-all\.endSupport-all//')
+#	[ "$f" != "$new" ] && mv "$f" "$new"
+#done
+
+#detect number of files in folder(if 1 only, dont merge)
 shopt -s nullglob
 gff_files=("$lyric_out"/*.gff)
 shopt -u nullglob

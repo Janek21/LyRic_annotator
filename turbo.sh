@@ -6,7 +6,7 @@
 #SBATCH --job-name=lyric_launcher
 
 #SBATCH --qos=normal
-#SBATCH --time=60
+#SBATCH --time=40
 
 #SBATCH --mem=8G
 #SBATCH --nodes=1

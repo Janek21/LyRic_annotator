@@ -13,6 +13,10 @@ species_name="$1"
 longread_db="${2:-../data/longread_protists.tsv}"
 busco_db="${3:-/no_backup/rg/references/busco_downloads}"
 
+#lyric_template.sh sanitizes species name for working dir
+#here too so that it fincs folder (raw name is only used to find the source).
+work_name=$(printf '%s' "$species_name" | sed -E 's/[^A-Za-z0-9._-]+/_/g')
+
 sp=$(echo "$species_name" | cut -f2 -d"_")
 
 mkdir -p logs
@@ -31,14 +35,14 @@ mkdir -p logs/run
 echo "runner.sh will start after download job $dl_jobid"
 run_jobid=$(sbatch --parsable \
 	--job-name="lyric_${sp}" \
-	--dependency=afterok:"$dl_jobid" \
+	--dependency=afterany:"$dl_jobid" \
 	--qos=normal \
 	--cpus-per-task=6 \
 	--mem=36G \
 	--time=500 \
 	--output="logs/run/%x_%j.out" \
 	--error="logs/run/%x_%j.err" \
-	scripts/runner.sh "$species_name")
+	scripts/runner.sh "$work_name")
 echo "Pipeline submitted: job $run_jobid"
 
 #3. Evaluate once the pipeline finishes (evaluation.sh runs from the repo root).
@@ -51,7 +55,7 @@ ev_jobid=$(sbatch --parsable \
 	--time=90 \
 	--output="logs/eval/%x_%j.out" \
 	--error="logs/eval/%x_%j.err" \
-	evaluation.sh "$species_name" "$busco_db")
+	evaluation.sh "$work_name" "$busco_db")
 echo "Evaluation submitted: job $ev_jobid (starts after job $run_jobid)"
 
 echo "Pipeline chain for $species_name: download(${dl_jobid:-none}) -> run($run_jobid) -> eval($ev_jobid)"

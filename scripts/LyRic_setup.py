@@ -11,7 +11,8 @@ def get_shortname(species_name):
     parts=species_name.split("_")
     if len(parts) < 2:
         raise ValueError("Species name must be in 'Genus_species' format (e.g., Plasmodium_vivax).")
-    return parts[0][0] + parts[1]
+    #drop the dot so placeholder epithets like 'sp.' do not leak into file names (Ssp. -> Ssp)
+    return (parts[0][0] + parts[1]).replace(".", "")
 
 
 ### Step 1: Prepare the Configuration File

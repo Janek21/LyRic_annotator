@@ -27,6 +27,13 @@ species_name="$1"
 species_dir="$(realpath "$species_name")"
 echo "Running LyRic for $species_name"
 
+#a 0-byte fastq means that SRR did not download; drop the whole species and stop
+if find "$species_name/data/fastq" -maxdepth 1 -type f -name '*.fastq.gz*' -size 0 | grep -q .; then
+	echo "Empty fastq in $species_name/data/fastq; download incomplete. Removing $species_name."
+	rm -rf "$species_name"
+	exit 1
+fi
+
 snakemake --snakefile "$species_dir/workflow/Snakefile" --directory "$species_dir" --configfile "$species_dir/config/default.yaml" --unlock
 snakemake --snakefile "$species_dir/workflow/Snakefile" --directory "$species_dir" --configfile "$species_dir/config/default.yaml" --cores $cpus --keep-going
 
