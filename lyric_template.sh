@@ -22,6 +22,7 @@ source $(conda info --base)/etc/profile.d/conda.sh
 conda activate buscomania
 
 #clone templane for non-human annotation
+rm -rf "$species_name"
 git clone -v https://github.com/Janek21/LyRic_nonhuman "$species_name"
 
 #select sra for specie
@@ -38,7 +39,7 @@ fi
 
 echo "$search_res" > "$species_name/full_srr.tsv"
 #select best SRRs
-python3 scripts/SRA_selector.py -i "$species_name/full_srr.tsv" -o "$species_name/srr_select.tsv" -s "$srr_list" -e error_species.txt -t 15 -m 8
+python3 scripts/SRA_selector.py -i "$species_name/full_srr.tsv" -o "$species_name/srr_select.tsv" -s "$srr_list" -e error_species.txt -t 15 -m 18
 
 #if no SRA survive filtering (file empty), clean up and abort species
 #[Species, SRA, size] rows logged to error_species.txt by SRA_selector.py

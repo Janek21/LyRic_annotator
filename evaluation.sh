@@ -119,15 +119,5 @@ sbatch \
 	--time=60 \
 	scripts/busco_evaluation.sh "$species_name" "$busco_db"
 
-##run gffcompare
-sbatch \
-	--job-name="gffcmp_${sp}" \
-	--cpus-per-task=2 \
-	--mem=4G \
-	--output="logs/eval/gffcmp/%x_%j.out" \
-	--error="logs/eval/gffcmp/%x_%j.err" \
-	--time=10 \
-	scripts/gffcompare_evaluation.sh "$species_name"
-
 rm -rf agat_log_*
 echo "Analysis completed!"
