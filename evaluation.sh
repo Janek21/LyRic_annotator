@@ -1,4 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#SBATCH --job-name=lyric_eval
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=12G
+#SBATCH --time=90
+#SBATCH --output=logs/eval/%x_%j.out
+#SBATCH --error=logs/eval/%x_%j.err
+
+echo ">STARTING at $(date)"
 
 species_name="$1"
 busco_db="${2:-/no_backup/rg/references/busco_downloads}"
@@ -59,7 +67,7 @@ fi
 counts_dir="summary/counts"
 mkdir -p "$counts_dir"
 merged="$tmp_files/merged_${sp}_ann.gff"
-#taxon id = most repeated id in the taxon column (same as busco_evaluation.sh)
+#taxon id = most repeated id in the taxon column (drives the genetic code and BUSCO lineage)
 taxonID=$(cut "$species_name/srr_select.tsv" -f4|sort|uniq -c|sort -nr|awk '{print $2}'|head -n1)
 gene_count=$(cut -f3 "$merged" | grep -cxF "gene" || true)
 transcript_count=$(cut -f3 "$merged" | grep -cxE 'transcript|mRNA' || true)
@@ -103,21 +111,38 @@ mv "$td_work/transcripts_$sp.fa.TD2.pep" "$tmp_files/prot_$sp.fa"
 
 echo "TransDecoder proteins in $tmp_files/prot_$sp.fa"
 
-mkdir -p logs
+##run busco inline (joined from the former scripts/busco_evaluation.sh so the whole
+##evaluation runs as one job; no extra sbatch dependency to chain)
+cpus="${SLURM_CPUS_PER_TASK:-$(nproc)}"
+res_lineage="$species_name/output/busco_res_lineage"
+res_euk="$species_name/output/busco_res_eukaryote"
+odb_version="odb12"
+busco_lineage_dir="summary/busco_lineage"
+busco_euk_dir="summary/busco_eukaryote"
 
-##in Case of massExecution
-#bash scripts/busco_evaluation.sh "$species_name"
-#exit
+rm -rf "$res_lineage" "$res_euk"
+mkdir -p "$res_lineage" "$res_euk" "$busco_lineage_dir" "$busco_euk_dir"
 
-##run busco
-sbatch \
-	--job-name="busco_${sp}" \
-	--cpus-per-task=4 \
-	--mem=16G \
-	--output="logs/eval/busco/%x_%j.out" \
-	--error="logs/eval/busco/%x_%j.err" \
-	--time=60 \
-	scripts/busco_evaluation.sh "$species_name" "$busco_db"
+#get the taxon-specific (custom) lineage (taxonID resolved above for the genetic code)
+busco_lineage=$(python3 scripts/get_busco_db.py -e "ibdyjsayzcllkyvjkc@nespf.com" -t "$taxonID" -b "$busco_db/file_versions.tsv" -v "$odb_version")
+echo "BUSCO lineage for $taxonID is $busco_lineage"
+#fixed eukaryote lineage (run for every species alongside the custom one)
+euk_lineage="eukaryota_${odb_version}"
+
+#1. taxon-specific lineage busco -> summary/busco_lineage/<stem>_Lbusco.json
+busco -m protein -i "$tmp_files/prot_$sp.fa" --download_path "$busco_db" -l "$busco_lineage" -c "$cpus" -f --out_path "${species_name}/output" -o busco_res_lineage --tar
+lineage_json="$busco_lineage_dir/${species_name}_${taxonID}_Lbusco.json"
+mv "$res_lineage"/*.json "$lineage_json"
+ln -sfv "$(realpath "$lineage_json")" "$res_lineage/${species_name}_${taxonID}_Lbusco.json"
+busco --plot "$busco_lineage_dir"
+
+#2. eukaryote lineage busco -> summary/busco_eukaryote/<stem>_Ebusco.json
+busco -m protein -i "$tmp_files/prot_$sp.fa" --download_path "$busco_db" -l "$euk_lineage" -c "$cpus" -f --out_path "${species_name}/output" -o busco_res_eukaryote --tar
+euk_json="$busco_euk_dir/${species_name}_${taxonID}_Ebusco.json"
+mv "$res_euk"/*.json "$euk_json"
+ln -sfv "$(realpath "$euk_json")" "$res_euk/${species_name}_${taxonID}_Ebusco.json"
+busco --plot "$busco_euk_dir"
 
 rm -rf agat_log_*
 echo "Analysis completed!"
+echo ">ENDING at $(date)"

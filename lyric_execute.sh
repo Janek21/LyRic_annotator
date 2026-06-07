@@ -58,4 +58,18 @@ ev_jobid=$(sbatch --parsable \
 	evaluation.sh "$work_name" "$busco_db")
 echo "Evaluation submitted: job $ev_jobid (starts after job $run_jobid)"
 
-echo "Pipeline chain for $species_name: download(${dl_jobid:-none}) -> run($run_jobid) -> eval($ev_jobid)"
+#4. Merge the LyRic annotation with the reference and evaluate the merged result.
+echo "=== Stage 4: merge_evaluation.sh ==="
+mkdir -p logs/eval/merge
+me_jobid=$(sbatch --parsable \
+	--job-name="merge_ly_${sp}" \
+	--dependency=afterok:"$ev_jobid" \
+	--cpus-per-task=4 \
+	--mem=16G \
+	--time=120 \
+	--output="logs/eval/merge/%x_%j.out" \
+	--error="logs/eval/merge/%x_%j.err" \
+	scripts/merge_evaluation.sh "$work_name" "$busco_db")
+echo "Merge evaluation submitted: job $me_jobid (starts after job $ev_jobid)"
+
+echo "Pipeline chain for $species_name: download(${dl_jobid:-none}) -> run($run_jobid) -> eval($ev_jobid) -> merge($me_jobid)"
