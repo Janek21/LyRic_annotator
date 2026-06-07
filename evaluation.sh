@@ -143,6 +143,16 @@ mv "$res_euk"/*.json "$euk_json"
 ln -sfv "$(realpath "$euk_json")" "$res_euk/${species_name}_${taxonID}_Ebusco.json"
 busco --plot "$busco_euk_dir"
 
+#predicted (merged) annotation relocated to summary/, hardlinked back to the species location
+#(canonical inode lives in summary/pred so the species folder can be removed safely)
+pred_dir="summary/pred"
+mkdir -p "$pred_dir"
+pred_dest="$pred_dir/${species_name}_${taxonID}_pred.gff"
+rm -f "$pred_dest"                 #refresh on reruns
+mv "$merged" "$pred_dest"         #relocate the prediction into the central summary tree
+ln "$pred_dest" "$merged"         #link it back so the original species location stays valid
+echo "Predicted annotation collected into $pred_dir/"
+
 rm -rf agat_log_*
 echo "Analysis completed!"
 echo ">ENDING at $(date)"

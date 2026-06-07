@@ -84,10 +84,11 @@ srr_count=$(wc -l < "$srr_list")
 array_max=$((srr_count - 1))
 
 dl_jobid=$(sbatch --parsable \
-	--job-name="srr_download_${sp}" \
-	--output="logs/dw/%x_%A.%a.out" \
-	--error="logs/dw/%x_%A.%a.err" \
-	--array=0-${array_max} \
+	--job-name="srr_download" \
+	--dependency=singleton \
+	--output="logs/dw/srr_download_${sp}.%A_%a.out" \
+	--error="logs/dw/srr_download_${sp}.%A_%a.err" \
+	--array=0-${array_max}%5 \
 	scripts/srr_dw.sh "$species_name")
 echo "Download array submitted: job $dl_jobid"
 #parsable line so lyric_prepare.sh can chain the next stages on this job
