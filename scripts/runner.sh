@@ -27,9 +27,11 @@ species_name="$1"
 species_dir="$(realpath "$species_name")"
 echo "Running LyRic for $species_name"
 
-#a 0-byte fastq means that SRR did not download; drop the whole species and stop
-if find "$species_name/data/fastq" -maxdepth 1 -type f -name '*.fastq.gz*' -size 0 | grep -q .; then
-	echo "Empty fastq in $species_name/data/fastq; download incomplete. Removing $species_name."
+#drop the whole species if any download is incomplete:
+#0-byte *.fastq.gz (no dw)
+#*.fastq.gz.part / *.fastq.gz.uniq (killed mid-write)
+if find "$species_name/data/fastq" -maxdepth 1 -type f \( -name '*.fastq.gz' -size 0 -o -name '*.fastq.gz.part' -o -name '*.fastq.gz.uniq' \) | grep -q .; then
+	echo "Incomplete download in $species_name/data/fastq (empty .fastq.gz or leftover .part/.uniq); removing $species_name."
 	rm -rf "$species_name"
 	exit 1
 fi

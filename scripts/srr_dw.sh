@@ -50,10 +50,12 @@ else
 	tmp_file="$out_dir/$SRRid.fastq.gz.part"
 	wget -q --tries=5 --waitretry=60 --random-wait --timeout=120 -O "$tmp_file" "https://${ftp_url}"
 
-	#Uniquify read IDs while writing the final file, LyRic is finnicky with that
-	#Some SRA fastqs reuse the spot accessions
+	#Uniquify read IDs while writing the final file (LyRic is finnicky with that;
+	#some SRA fastqs reuse the spot accessions). Append a per-record counter to every
+	#header's ID token: uniqueness needs no in-memory table, so this streams in O(1)
+	#memory (the old seen[] hash held every read ID and OOMed on large runs).
 	uniq_file="$out_dir/$SRRid.fastq.gz.uniq"
-	zcat "$tmp_file" | awk 'NR%4==1{id=$1; if(++seen[id]>1){$1=id"_"seen[id]}} {print}' | gzip > "$uniq_file"
+	zcat "$tmp_file" | awk 'NR%4==1{sub(/^[^ \t]+/, "&_" (++n))} {print}' | gzip > "$uniq_file"
 	mv "$uniq_file" "$result_file"
 	rm -f "$tmp_file"
 	echo "Complete: new file is $result_file"
