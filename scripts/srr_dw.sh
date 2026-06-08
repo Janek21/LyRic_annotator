@@ -41,23 +41,29 @@ else
 	#Resolve the FASTQ URL from ENA (returns paths without a scheme prefix)
 	ftp_url=$(curl -sf "https://www.ebi.ac.uk/ena/portal/api/filereport?accession=${SRRid}&result=read_run&fields=fastq_ftp" | tail -n +2 | cut -f2 | tr ';' '\n' | head -1)
 
-	if [ -z "$ftp_url" ]; then
-		echo "Error: could not retrieve FTP URL for $SRRid from ENA."
-		exit 1
+	#final file is written atomically via a temp .uniq file (read IDs uniquified so LyRic accepts them)
+	uniq_file="$out_dir/$SRRid.fastq.gz.uniq"
+
+	if [ -n "$ftp_url" ]; then
+		#ENA has a pre-made gzipped FASTQ: download to a temp file, then uniquify read IDs while rewriting
+		tmp_file="$out_dir/$SRRid.fastq.gz.part"
+		wget -q --tries=5 --waitretry=60 --random-wait --timeout=120 -O "$tmp_file" "https://${ftp_url}"
+		zcat "$tmp_file" | awk 'NR%4==1{sub(/^[^ \t]+/, "&_" (++n))} {print}' | gzip > "$uniq_file"
+		rm -f "$tmp_file"
+	else
+		module load SRA-Toolkit
+		#ENA has no FASTQ for this accession: fall back to the SRA Toolkit and compress the dump ourselves
+		echo "No ENA FASTQ URL for $SRRid; falling back to fasterq-dump."
+		threads="${SLURM_CPUS_PER_TASK:-2}"
+		sra_tmp="$out_dir/$SRRid.sra_tmp"
+		rm -rf "$sra_tmp"; mkdir -p "$sra_tmp"
+		#dump uncompressed FASTQ (skip technical reads), then uniquify + compress to match the ENA path
+		fasterq-dump "$SRRid" -O "$sra_tmp" -t "$sra_tmp" -e "$threads" --skip-technical
+		cat "$sra_tmp"/*.fastq | awk 'NR%4==1{sub(/^[^ \t]+/, "&_" (++n))} {print}' | pigz -p "$threads" > "$uniq_file"
+		rm -rf "$sra_tmp"
 	fi
 
-	#Download to a temp file first (avoids leaving a partial file that the skip-check above would mistake for a finished download)
-	tmp_file="$out_dir/$SRRid.fastq.gz.part"
-	wget -q --tries=5 --waitretry=60 --random-wait --timeout=120 -O "$tmp_file" "https://${ftp_url}"
-
-	#Uniquify read IDs while writing the final file (LyRic is finnicky with that;
-	#some SRA fastqs reuse the spot accessions). Append a per-record counter to every
-	#header's ID token: uniqueness needs no in-memory table, so this streams in O(1)
-	#memory (the old seen[] hash held every read ID and OOMed on large runs).
-	uniq_file="$out_dir/$SRRid.fastq.gz.uniq"
-	zcat "$tmp_file" | awk 'NR%4==1{sub(/^[^ \t]+/, "&_" (++n))} {print}' | gzip > "$uniq_file"
 	mv "$uniq_file" "$result_file"
-	rm -f "$tmp_file"
 	echo "Complete: new file is $result_file"
 fi
 
