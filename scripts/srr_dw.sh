@@ -6,9 +6,9 @@
 #SBATCH --job-name=srr_download
 
 #SBATCH --qos=normal
-#SBATCH --time=180
+#SBATCH --time=240
 
-#SBATCH --mem=4G
+#SBATCH --mem=12G
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
@@ -23,6 +23,7 @@ species_name="$1"
 out_dir="$species_name/data/fastq"
 mkdir -p "$out_dir"
 
+echo "Species is $species_name"
 # accession for this array task (line SLURM_ARRAY_TASK_ID + 1)
 SRRid=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$species_name/srr_list.tsv")
 

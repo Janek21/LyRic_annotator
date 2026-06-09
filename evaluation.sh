@@ -14,6 +14,22 @@ busco_db="${2:-/no_backup/rg/references/busco_downloads}"
 sp=$(echo "$species_name"|cut -f2 -d"_")
 echo "$sp"
 
+#count gene/transcript models robustly across annotation types
+count_models() {  # $1=gff  $2=feature-type regex  $3=attribute key (fallback)
+	awk -F'\t' -v feat="$2" -v key="$3" '
+		/^#/ { next }
+		$3 ~ feat { nfeat++ }
+		{
+			if (match($9, key "[= ]\"?[^\";]+")) {
+				id = substr($9, RSTART, RLENGTH); sub(key "[= ]\"?", "", id); seen[id]=1
+			}
+		}
+		END {
+			if (nfeat > 0) print nfeat
+			else { n=0; for (k in seen) n++; print n }
+		}' "$1"
+}
+
 #cativate busco conda env
 source $(conda info --base)/etc/profile.d/conda.sh
 conda activate buscomania
@@ -69,8 +85,8 @@ mkdir -p "$counts_dir"
 merged="$tmp_files/merged_${sp}_ann.gff"
 #taxon id = most repeated id in the taxon column (drives the genetic code and BUSCO lineage)
 taxonID=$(cut "$species_name/srr_select.tsv" -f4|sort|uniq -c|sort -nr|awk '{print $2}'|head -n1)
-gene_count=$(cut -f3 "$merged" | grep -cxF "gene" || true)
-transcript_count=$(cut -f3 "$merged" | grep -cxE 'transcript|mRNA' || true)
+gene_count=$(count_models "$merged" '^gene$' gene_id)
+transcript_count=$(count_models "$merged" '^(mRNA|transcript)$' transcript_id)
 echo "$gene_count" > "$counts_dir/${species_name}_${taxonID}_gc.txt"
 echo "$transcript_count" > "$counts_dir/${species_name}_${taxonID}_tc.txt"
 echo "      Gene models: $gene_count | Transcript models: $transcript_count"

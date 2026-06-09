@@ -29,7 +29,7 @@ git clone -v https://github.com/Janek21/LyRic_nonhuman "$species_name"
 srr_list="$species_name/srr_list.tsv"
 
 #match the organism-name column (field 5) exactly, or as a "<name> <strain>" prefix (avoid gracilis vs neogracilis))
-#name first (strain-specific), then (genus + species).
+#name first (strain-specific), then (genus + species)
 as_words=$(echo "$raw_name" | tr '_' ' ')
 binom=$(echo "$as_words" | awk '{print $1, $2}')
 echo "Searching for organism '$as_words' (binomial '$binom')"
