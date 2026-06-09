@@ -15,6 +15,7 @@ echo ">STARTING at $(date)"
 
 species_name="$1"
 busco_db="${2:-/no_backup/rg/references/busco_downloads}"
+data_root="${3:-../data/species}"   #where the per-species source assemblies/annotations live
 cpus="${SLURM_CPUS_PER_TASK:-$(nproc)}"
 
 sp=$(echo "$species_name"|cut -f2 -d"_")
@@ -27,18 +28,28 @@ conda activate buscomania
 tmp_files="$species_name/output/files"
 mkdir -p "$tmp_files"
 
-#reference annotation placed by lyric_template.sh (own assembly or closest-relative fallback)
+#reference annotation placed by lyric_template.sh in data/input/Annotation.gff. check if it can be used by lookig if gff exists on ../data/species
+shopt -s nullglob
+own_ref_src=("$data_root/${species_name}"*/GC*/"${species_name}"*GC*.gff.gz)
+shopt -u nullglob
+
 ref_gff="$species_name/data/input/Annotation.gff"
 #full LyRic annotation produced by evaluation.sh
 lyric_gff="$tmp_files/merged_${sp}_ann.gff"
 
-#only species that present a reference annotation are merged; the rest are logged and skipped
+#only species with their OWN reference annotation are merged; the rest are logged and skipped
 merge_summary_dir="summary/merge"
 mkdir -p "$merge_summary_dir"
-if [ ! -s "$ref_gff" ]; then
-	echo "No reference annotation at $ref_gff; nothing to merge for $species_name. Skipping."
-	echo "$species_name" >> "$merge_summary_dir/no_reference.txt"
+if [ "${#own_ref_src[@]}" -eq 0 ] || [ ! -s "${own_ref_src[0]}" ]; then
+	echo "No own reference annotation for $species_name under $data_root (only a fallback or none); skipping merge."
+	#record once so reruns don't pile up duplicate lines
+	grep -qxF "$species_name" "$merge_summary_dir/no_reference.txt" 2>/dev/null \
+		|| echo "$species_name" >> "$merge_summary_dir/no_reference.txt"
 	exit 0
+fi
+if [ ! -s "$ref_gff" ]; then
+	echo "Own reference source exists but $ref_gff is missing; re-run lyric_template.sh setup. Aborting."
+	exit 1
 fi
 if [ ! -s "$lyric_gff" ]; then
 	echo "LyRic annotation $lyric_gff missing; run evaluation.sh first. Aborting."
