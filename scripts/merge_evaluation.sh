@@ -21,20 +21,17 @@ cpus="${SLURM_CPUS_PER_TASK:-$(nproc)}"
 sp=$(echo "$species_name"|cut -f2 -d"_")
 echo "$sp"
 
-#count gene/transcript models robustly across annotation types
-count_models() {  # $1=gff  $2=feature-type regex  $3=attribute key (fallback)
-	awk -F'\t' -v feat="$2" -v key="$3" '
+#count gene + transcript models in one gffread pass. --keep-genes normalises any
+#input (tmerge GTF or AGAT GFF3) into gene + transcript records: real gene
+#features are preserved (AGAT-clustered loci, not the per-transcript gene_id),
+#and one gene + transcript is synthesised per id when the input has no such
+#feature. Prints "<gene_count>\t<transcript_count>".
+count_models() {  # $1=gff
+	{ gffread "$1" --keep-genes -o - 2>/dev/null || true; } | awk -F'\t' '
 		/^#/ { next }
-		$3 ~ feat { nfeat++ }
-		{
-			if (match($9, key "[= ]\"?[^\";]+")) {
-				id = substr($9, RSTART, RLENGTH); sub(key "[= ]\"?", "", id); seen[id]=1
-			}
-		}
-		END {
-			if (nfeat > 0) print nfeat
-			else { n=0; for (k in seen) n++; print n }
-		}' "$1"
+		$3 ~ /^([A-Za-z_]*gene)$/                { g++; next }
+		$3 ~ /^(transcript|mRNA|[A-Za-z_]*RNA)$/ { t++ }
+		END { printf "%d\t%d\n", g, t }'
 }
 
 #activate the shared conda env (agat, gffread, TD2, busco)
@@ -50,8 +47,11 @@ own_ref_src=("$data_root/${species_name}"*/GC*/"${species_name}"*GC*.gff.gz)
 shopt -u nullglob
 
 ref_gff="$species_name/data/input/Annotation.gff"
-#full LyRic annotation produced by evaluation.sh
-lyric_gff="$tmp_files/merged_${sp}_ann.gff"
+#LyRic annotation produced by evaluation.sh: prefer the CDS-augmented annotation
+#(exons+CDS); fall back to the exon-only merge for species evaluated before CDS
+#integration so reruns of older results keep working.
+lyric_gff="$tmp_files/CDSmerged_${sp}_ann.gff"
+[ -s "$lyric_gff" ] || lyric_gff="$tmp_files/merged_${sp}_ann.gff"
 
 #only species with their OWN reference annotation are merged; the rest are logged and skipped
 merge_summary_dir="summary/merge"
@@ -87,15 +87,12 @@ counts_dir="$merge_summary_dir/counts"
 mkdir -p "$counts_dir"
 #taxon id = most repeated id in the taxon column (same as evaluation.sh)
 taxonID=$(cut "$species_name/srr_select.tsv" -f4|sort|uniq -c|sort -nr|awk '{print $2}'|head -n1)
-gene_count=$(count_models "$merged_ref" '^gene$' gene_id)
-transcript_count=$(count_models "$merged_ref" '^(mRNA|transcript)$' transcript_id)
+counts=$(count_models "$merged_ref")
+gene_count=${counts%%$'\t'*}
+transcript_count=${counts##*$'\t'}
 echo "$gene_count" > "$counts_dir/${species_name}_${taxonID}_gc.txt"
 echo "$transcript_count" > "$counts_dir/${species_name}_${taxonID}_tc.txt"
 echo "      Gene models: $gene_count | Transcript models: $transcript_count"
-
-#keep one isoform per gene before translating to proteins
-agat_sp_keep_longest_isoform.pl --gff "$merged_ref" --config "$agat_cfg" --out "$tmp_files/longestRef_${sp}_ann.gff"
-echo "Found longest isoforms."
 
 #resolve the NCBI nuclear genetic code for this taxon (codon table for non-standard cases)
 gcode=$(python3 scripts/get_genetic_code.py -e "ibdyjsayzcllkyvjkc@nespf.com" -k "${NCBI_API_KEY:-}" -t "$taxonID" 2>/dev/null)
@@ -105,22 +102,16 @@ if ! [[ "$gcode" =~ ^[0-9]+$ ]]; then
 fi
 echo "Translation table for $taxonID: $gcode"
 
-#generate the transcriptome with gffread, using the uncompressed genome copied into the species dir
+#proteins for BUSCO via the same ORF inference as the prediction step
+#(scripts/infer_cds.sh). The merged annotation already carries CDS - the CDS file
+#is one of the merge inputs - so only the longest-isoform proteome is produced
+#here, with no CDS splice.
 shortname=$(python3 scripts/LyRic_setup.py shortname -s "$species_name")
+genome_fa="$species_name/data/fasta/$shortname.fa"
 td_work="$tmp_files/transdecoder_merge_work"
-mkdir -p "$td_work"
-transcripts_abs="$(realpath "$tmp_files/transcriptsRef_$sp.fa")"
-gffread "$tmp_files/longestRef_${sp}_ann.gff" -g "$species_name/data/fasta/$shortname.fa" -w "$transcripts_abs"
-
-(cd "$td_work" && #move to folder for TD2 execution ONLY
-	#find ORFs in transcripts
-	TD2.LongOrfs -t "$transcripts_abs" -O . -G "$gcode"
-	#select most probable ORFs to create proteins
-	TD2.Predict -t "$transcripts_abs" -O . -G "$gcode"
-)
 prot_file="$tmp_files/protRef_$sp.fa"
-mv "$td_work/transcriptsRef_$sp.fa.TD2.pep" "$prot_file"
-echo "TransDecoder proteins in $prot_file"
+bash scripts/infer_cds.sh "$merged_ref" "$genome_fa" "$gcode" "$td_work" "$prot_file"
+echo "TransDecoder proteins (longest isoform per gene) in $prot_file"
 
 ##run busco on the merged proteome (taxon-specific + eukaryote lineages)
 res_lineage="$species_name/output/busco_mergedRef_lineage"

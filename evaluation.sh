@@ -14,20 +14,17 @@ busco_db="${2:-/no_backup/rg/references/busco_downloads}"
 sp=$(echo "$species_name"|cut -f2 -d"_")
 echo "$sp"
 
-#count gene/transcript models robustly across annotation types
-count_models() {  # $1=gff  $2=feature-type regex  $3=attribute key (fallback)
-	awk -F'\t' -v feat="$2" -v key="$3" '
+#count gene + transcript models in one gffread pass. --keep-genes normalises any
+#input (tmerge GTF or AGAT GFF3) into gene + transcript records: real gene
+#features are preserved (AGAT-clustered loci, not the per-transcript gene_id),
+#and one gene + transcript is synthesised per id when the input has no such
+#feature. Prints "<gene_count>\t<transcript_count>".
+count_models() {  # $1=gff
+	{ gffread "$1" --keep-genes -o - 2>/dev/null || true; } | awk -F'\t' '
 		/^#/ { next }
-		$3 ~ feat { nfeat++ }
-		{
-			if (match($9, key "[= ]\"?[^\";]+")) {
-				id = substr($9, RSTART, RLENGTH); sub(key "[= ]\"?", "", id); seen[id]=1
-			}
-		}
-		END {
-			if (nfeat > 0) print nfeat
-			else { n=0; for (k in seen) n++; print n }
-		}' "$1"
+		$3 ~ /^([A-Za-z_]*gene)$/                { g++; next }
+		$3 ~ /^(transcript|mRNA|[A-Za-z_]*RNA)$/ { t++ }
+		END { printf "%d\t%d\n", g, t }'
 }
 
 #cativate busco conda env
@@ -85,15 +82,12 @@ mkdir -p "$counts_dir"
 merged="$tmp_files/merged_${sp}_ann.gff"
 #taxon id = most repeated id in the taxon column (drives the genetic code and BUSCO lineage)
 taxonID=$(cut "$species_name/srr_select.tsv" -f4|sort|uniq -c|sort -nr|awk '{print $2}'|head -n1)
-gene_count=$(count_models "$merged" '^gene$' gene_id)
-transcript_count=$(count_models "$merged" '^(mRNA|transcript)$' transcript_id)
+counts=$(count_models "$merged")
+gene_count=${counts%%$'\t'*}
+transcript_count=${counts##*$'\t'}
 echo "$gene_count" > "$counts_dir/${species_name}_${taxonID}_gc.txt"
 echo "$transcript_count" > "$counts_dir/${species_name}_${taxonID}_tc.txt"
 echo "      Gene models: $gene_count | Transcript models: $transcript_count"
-
-#get longest isoform
-agat_sp_keep_longest_isoform.pl --gff "$tmp_files/merged_${sp}_ann.gff" --config "$agat_cfg" --out "$tmp_files/longest_${sp}_ann.gff"
-echo "Found longest isoforms."
 
 #resolve the NCBI nuclear genetic code for this taxon (codon table for on-standard cases)
 echo "KEY: $NCBI_API_KEY"
@@ -104,28 +98,17 @@ if ! [[ "$gcode" =~ ^[0-9]+$ ]]; then
 fi
 echo "Translation table for $taxonID: $gcode"
 
-#transform to proteins (sequences with premature stops or frameshifts will be translated exactly as your in gff3+computationally better)
-
-#ensure files are generated in particular folders(no naming clash)
+#predict ORFs with TD2 and (1) splice the resulting CDS onto the exon-only LyRic
+#annotation (tmerge models exons only), (2) emit one protein per gene (longest
+#isoform) for BUSCO. See scripts/infer_cds.sh.
 td_work="$tmp_files/transdecoder_work"
-mkdir -p "$td_work"
-transcripts_abs="$(realpath "$tmp_files/transcripts_$sp.fa")"
-
-#generate transcriptome with gffread, using the uncompressed genome copied into the species dir
 shortname=$(python3 scripts/LyRic_setup.py shortname -s "$species_name")
-gffread "$tmp_files/longest_${sp}_ann.gff" -g "$species_name/data/fasta/$shortname.fa" -w "$transcripts_abs"
-
-(cd "$td_work" && #move to folder for TD2 execution ONLY
-	#Find ORFs in transcripts
-	TD2.LongOrfs -t "$transcripts_abs" -O . -G "$gcode"
-	#Select most probable ORFs to create proteins
-	TD2.Predict -t "$transcripts_abs" -O . -G "$gcode" #-O is output of ORFs
-)
-
-#move TD2 prot files to correct folders
-mv "$td_work/transcripts_$sp.fa.TD2.pep" "$tmp_files/prot_$sp.fa"
-
-echo "TransDecoder proteins in $tmp_files/prot_$sp.fa"
+genome_fa="$species_name/data/fasta/$shortname.fa"
+cds_merged="$tmp_files/CDSmerged_${sp}_ann.gff"
+prot_file="$tmp_files/prot_$sp.fa"
+bash scripts/infer_cds.sh "$merged" "$genome_fa" "$gcode" "$td_work" "$prot_file" "$cds_merged"
+echo "CDS-augmented annotation written to $cds_merged"
+echo "TransDecoder proteins (longest isoform per gene) in $prot_file"
 
 ##run busco inline (joined from the former scripts/busco_evaluation.sh so the whole
 ##evaluation runs as one job; no extra sbatch dependency to chain)
@@ -159,14 +142,16 @@ mv "$res_euk"/*.json "$euk_json"
 ln -sfv "$(realpath "$euk_json")" "$res_euk/${species_name}_${taxonID}_Ebusco.json"
 busco --plot "$busco_euk_dir"
 
-#predicted (merged) annotation relocated to summary/, hardlinked back to the species location
-#(canonical inode lives in summary/pred so the species folder can be removed safely)
+#predicted (CDS-augmented) annotation relocated to summary/, hardlinked back to the species location
+#(canonical inode lives in summary/pred so the species folder can be removed safely).
+#the exon-only $merged stays in place: mass_merge/mass_pred_merge gate on it and
+#merge_evaluation falls back to it for species evaluated before CDS integration.
 pred_dir="summary/pred"
 mkdir -p "$pred_dir"
 pred_dest="$pred_dir/${species_name}_${taxonID}_pred.gff"
 rm -f "$pred_dest"                 #refresh on reruns
-mv "$merged" "$pred_dest"         #relocate the prediction into the central summary tree
-ln "$pred_dest" "$merged"         #link it back so the original species location stays valid
+mv "$cds_merged" "$pred_dest"     #relocate the CDS-augmented prediction into the central summary tree
+ln "$pred_dest" "$cds_merged"     #link it back so the original species location stays valid
 echo "Predicted annotation collected into $pred_dir/"
 
 rm -rf agat_log_*
