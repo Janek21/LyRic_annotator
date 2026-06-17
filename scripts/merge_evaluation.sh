@@ -108,6 +108,20 @@ echo "Translation table for $taxonID: $gcode"
 #here, with no CDS splice.
 shortname=$(python3 scripts/LyRic_setup.py shortname -s "$species_name")
 genome_fa="$species_name/data/fasta/$shortname.fa"
+
+#genome size = total assembly length (exact; sum of contig lengths, incl. N gaps)
+fai="${genome_fa}.fai"
+if [ -s "$fai" ]; then
+	genome_size=$(cut -f2 "$fai" | awk '{s+=$1} END{print s+0}')
+elif [[ "$genome_fa" == *.gz ]]; then
+	genome_size=$(pigz -dcp "${SLURM_CPUS_PER_TASK:-$(nproc)}" "$genome_fa" \
+		| awk '/^>/{next} {s+=length($0)} END{print s+0}')
+else
+	genome_size=$(awk '/^>/{next} {s+=length($0)} END{print s+0}' "$genome_fa")
+fi
+echo "$genome_size" > "$counts_dir/${species_name}_${taxonID}_gs.txt"
+echo "      Genome size: ${genome_size} bp"
+
 td_work="$tmp_files/transdecoder_merge_work"
 prot_file="$tmp_files/protRef_$sp.fa"
 bash scripts/infer_cds.sh "$merged_ref" "$genome_fa" "$gcode" "$td_work" "$prot_file"

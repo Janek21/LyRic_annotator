@@ -20,7 +20,19 @@ module load CMake/3.29.3-GCCcore-12.3.0
 module load Python/3.13.5-GCCcore-14.3.0
 
 source ~/bin/snakemake/bin/activate
+
+#use the CPUs and memory granted by the SLURM allocation as Snakemake's budget;
+#fall back to small defaults when run outside SLURM (e.g. a local/interactive run)
 cpus="${SLURM_CPUS_PER_TASK:-2}"
+if [ -n "${SLURM_MEM_PER_NODE:-}" ]; then
+	mem_mb="$SLURM_MEM_PER_NODE"
+elif [ -n "${SLURM_MEM_PER_CPU:-}" ]; then
+	mem_mb=$(( SLURM_MEM_PER_CPU * cpus ))
+else
+	#must stay >= the largest per-rule mem_mb reservation in the profile
+	#(longReadMapping reserves 5000), or Snakemake refuses to schedule it
+	mem_mb=8000
+fi
 
 #run from the repo root, pointing snakemake at the species clone
 species_name="$1"
@@ -37,7 +49,7 @@ if find "$species_name/data/fastq" -maxdepth 1 -type f \( -name '*.fastq.gz' -si
 fi
 
 snakemake --snakefile "$species_dir/workflow/Snakefile" --directory "$species_dir" --configfile "$species_dir/config/default.yaml" --unlock
-snakemake --snakefile "$species_dir/workflow/Snakefile" --directory "$species_dir" --configfile "$species_dir/config/default.yaml" --cores $cpus --keep-going
+snakemake --snakefile "$species_dir/workflow/Snakefile" --directory "$species_dir" --configfile "$species_dir/config/default.yaml" --cores "$cpus" --resources mem_mb="$mem_mb" --keep-going
 
 #record memory usage
 cgroup_dir=$(awk -F: '{print $NF}' /proc/self/cgroup)

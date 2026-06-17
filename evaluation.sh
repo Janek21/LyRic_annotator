@@ -67,9 +67,9 @@ file_count=${#gff_files[@]}
 echo "FC is $file_count"
 
 if [ "$file_count" -eq 1 ]; then
-	#if only 1 file, rename it for the rest of the pipeline
-	cp "${gff_files[0]}" "$tmp_files/merged_${sp}_ann.gff"
-	echo "Copied files at $tmp_files/merged_${sp}_ann.gff"
+	#normalise gff
+	agat_convert_sp_gxf2gxf.pl -g "${gff_files[0]}" --config "$agat_cfg" -o "$tmp_files/merged_${sp}_ann.gff"
+	echo "Normalized single file at $tmp_files/merged_${sp}_ann.gff"
 else
 	#merge gffs
 	agat_sp_merge_annotations.pl --gff "$lyric_out" --config "$agat_cfg" --out "$tmp_files/merged_${sp}_ann.gff"
@@ -104,6 +104,20 @@ echo "Translation table for $taxonID: $gcode"
 td_work="$tmp_files/transdecoder_work"
 shortname=$(python3 scripts/LyRic_setup.py shortname -s "$species_name")
 genome_fa="$species_name/data/fasta/$shortname.fa"
+
+#genome size = total assembly length (exact; sum of contig lengths, incl. N gaps)
+fai="${genome_fa}.fai"
+if [ -s "$fai" ]; then
+	genome_size=$(cut -f2 "$fai" | awk '{s+=$1} END{print s+0}')
+elif [[ "$genome_fa" == *.gz ]]; then
+	genome_size=$(pigz -dcp "${SLURM_CPUS_PER_TASK:-$(nproc)}" "$genome_fa" \
+		| awk '/^>/{next} {s+=length($0)} END{print s+0}')
+else
+	genome_size=$(awk '/^>/{next} {s+=length($0)} END{print s+0}' "$genome_fa")
+fi
+echo "$genome_size" > "$counts_dir/${species_name}_${taxonID}_gs.txt"
+echo "      Genome size: ${genome_size} bp"
+
 cds_merged="$tmp_files/CDSmerged_${sp}_ann.gff"
 prot_file="$tmp_files/prot_$sp.fa"
 bash scripts/infer_cds.sh "$merged" "$genome_fa" "$gcode" "$td_work" "$prot_file" "$cds_merged"

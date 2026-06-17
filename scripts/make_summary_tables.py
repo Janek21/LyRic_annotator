@@ -11,8 +11,8 @@ Modes (run after all species finish):
                      _regular / _merged) into summary/joint_summary.tsv
 
 Each mode produces three tables:
-  1. counts_summary   - species, gene_count, transcript_count
-                        (from <base>/counts/*_gc.txt and *_tc.txt)
+  1. counts_summary   - species, gene_count, transcript_count, genome_size_bp
+                        (from <base>/counts/*_gc.txt, *_tc.txt and *_gs.txt)
   2. busco_summary    - species, lineage_used, lineage_completeness,
                         eukaryote_completeness  (BUSCO "Complete %" C, no % sign)
                         (from <base>/busco_lineage/*_Lbusco.json and
@@ -74,12 +74,16 @@ def build_counts_table(counts_dir):
     for gc in sorted(glob.glob(os.path.join(counts_dir, "*_gc.txt"))):
         stem = os.path.basename(gc)[: -len("_gc.txt")]
         tc = os.path.join(counts_dir, f"{stem}_tc.txt")
+        gs = os.path.join(counts_dir, f"{stem}_gs.txt")
         rows.append({
             "species": species_from_stem(stem),
             "gene_count": read_value(gc),
             "transcript_count": read_value(tc),
+            "genome_size_bp": read_value(gs),
         })
-    return pd.DataFrame(rows, columns=["species", "gene_count", "transcript_count"])
+    return pd.DataFrame(
+        rows,
+        columns=["species", "gene_count", "transcript_count", "genome_size_bp"])
 
 
 def build_busco_table(busco_lineage_dir, busco_euk_dir):
