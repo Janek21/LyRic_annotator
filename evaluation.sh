@@ -83,8 +83,6 @@ taxonID=$(cut "$species_name/srr_select.tsv" -f4|sort|uniq -c|sort -nr|awk '{pri
 counts=$(count_models "$merged")
 gene_count=${counts%%$'\t'*}
 transcript_count=${counts##*$'\t'}
-echo "$gene_count" > "$counts_dir/${species_name}_${taxonID}_gc.txt"
-echo "$transcript_count" > "$counts_dir/${species_name}_${taxonID}_tc.txt"
 echo "      Gene models: $gene_count | Transcript models: $transcript_count"
 
 #resolve the NCBI nuclear genetic code for this taxon (codon table for on-standard cases)
@@ -113,7 +111,6 @@ elif [[ "$genome_fa" == *.gz ]]; then
 else
 	genome_size=$(awk '/^>/{next} {s+=length($0)} END{print s+0}' "$genome_fa")
 fi
-echo "$genome_size" > "$counts_dir/${species_name}_${taxonID}_gs.txt"
 echo "      Genome size: ${genome_size} bp"
 
 cds_merged="$tmp_files/CDSmerged_${sp}_ann.gff"
@@ -121,6 +118,35 @@ prot_file="$tmp_files/prot_$sp.fa"
 bash scripts/infer_cds.sh "$merged" "$genome_fa" "$gcode" "$td_work" "$prot_file" "$cds_merged"
 echo "CDS-augmented annotation written to $cds_merged"
 echo "TransDecoder proteins (longest isoform per gene) in $prot_file"
+
+# ── derived metrics + one consolidated per-species file ──────────────
+# transcriptome_transcripts = records that entered ORF calling ($td_work/transcripts.fa);
+# coding_transcripts        = unique source transcripts with >=1 TD2 ORF (full .pep,
+#                             not the longest-isoform proteome), .pN suffix stripped.
+tx_fa="$td_work/transcripts.fa"
+pep_fa="$td_work/transcripts.fa.TD2.pep"
+transcriptome_tx=$(grep -c '^>' "$tx_fa" 2>/dev/null || echo 0)
+coding_tx=$( { grep '^>' "$pep_fa" 2>/dev/null || true; } \
+	| awk '{sub(/^>/,"",$1); sub(/\.p[0-9]+$/,"",$1); print $1}' | sort -u | wc -l)
+
+metrics_file="$counts_dir/${species_name}_${taxonID}_metrics.tsv"
+awk -v sp="${species_name}_${taxonID}" \
+	-v gc="$gene_count" -v tc="$transcript_count" -v gs="$genome_size" \
+	-v cod="$coding_tx" -v ntx="$transcriptome_tx" 'BEGIN {
+		OFS = "\t"
+		gd  = (gs  > 0) ? sprintf("%.2f", gc / (gs / 1e6)) : "NA"
+		td  = (gs  > 0) ? sprintf("%.2f", tc / (gs / 1e6)) : "NA"
+		ipg = (gc  > 0) ? sprintf("%.3f", tc / gc)         : "NA"
+		cf  = (ntx > 0) ? sprintf("%.4f", cod / ntx)       : "NA"
+		print "species", "gene_count", "transcript_count", "genome_size_bp", \
+		      "coding_transcripts", "transcriptome_transcripts", \
+		      "gene_density_per_mb", "transcript_density_per_mb", \
+		      "isoforms_per_gene", "coding_fraction"
+		print sp, gc, tc, gs, cod, ntx, gd, td, ipg, cf
+	}' > "$metrics_file"
+read -r _ _ _ _ _ _ gd td ipg cf < <(tail -1 "$metrics_file")
+echo "      Metrics: gene_density=${gd}/Mb transcript_density=${td}/Mb isoforms/gene=${ipg} coding_fraction=${cf}"
+echo "      Consolidated metrics -> $metrics_file"
 
 ##run busco inline (joined from the former scripts/busco_evaluation.sh so the whole
 ##evaluation runs as one job; no extra sbatch dependency to chain)

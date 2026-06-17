@@ -11,8 +11,9 @@ Modes (run after all species finish):
                      _regular / _merged) into summary/joint_summary.tsv
 
 Each mode produces three tables:
-  1. counts_summary   - species, gene_count, transcript_count, genome_size_bp
-                        (from <base>/counts/*_gc.txt, *_tc.txt and *_gs.txt)
+  1. counts_summary   - species + counts + derived metrics (gene/transcript
+                        density, isoforms per gene, coding fraction)
+                        (from <base>/counts/*_metrics.tsv, one row per species)
   2. busco_summary    - species, lineage_used, lineage_completeness,
                         eukaryote_completeness  (BUSCO "Complete %" C, no % sign)
                         (from <base>/busco_lineage/*_Lbusco.json and
@@ -37,19 +38,26 @@ import pandas as pd
 
 SUMMARY_DIR = "summary"
 
+# counts + derived metrics, one row per species (written by evaluation.sh /
+# merge_evaluation.sh). See isoquant_annotator/derived_metrics.md.
+METRIC_COLUMNS = [
+    "species",
+    "gene_count",
+    "transcript_count",
+    "genome_size_bp",
+    "coding_transcripts",
+    "transcriptome_transcripts",
+    "gene_density_per_mb",
+    "transcript_density_per_mb",
+    "isoforms_per_gene",
+    "coding_fraction",
+]
+
 
 def species_from_stem(stem):
     """<species_name>_<taxonID> -> <species_name> (taxon id is the trailing _<digits>)."""
     m = re.match(r"^(.+)_[0-9]+$", stem)
     return m.group(1) if m else stem
-
-
-def read_value(path):
-    try:
-        with open(path) as fh:
-            return fh.read().strip()
-    except FileNotFoundError:
-        return "NA"
 
 
 def busco_completeness(path):
@@ -70,20 +78,22 @@ def busco_completeness(path):
 # ---------------------------------------------------------------------------
 
 def build_counts_table(counts_dir):
-    rows = []
-    for gc in sorted(glob.glob(os.path.join(counts_dir, "*_gc.txt"))):
-        stem = os.path.basename(gc)[: -len("_gc.txt")]
-        tc = os.path.join(counts_dir, f"{stem}_tc.txt")
-        gs = os.path.join(counts_dir, f"{stem}_gs.txt")
-        rows.append({
-            "species": species_from_stem(stem),
-            "gene_count": read_value(gc),
-            "transcript_count": read_value(tc),
-            "genome_size_bp": read_value(gs),
-        })
-    return pd.DataFrame(
-        rows,
-        columns=["species", "gene_count", "transcript_count", "genome_size_bp"])
+    """Concatenate every per-species _metrics.tsv; key on the bare species name."""
+    frames = []
+    for path in sorted(glob.glob(os.path.join(counts_dir, "*_metrics.tsv"))):
+        stem = os.path.basename(path)[: -len("_metrics.tsv")]
+        try:
+            df = pd.read_csv(path, sep="\t", dtype=str)
+        except (pd.errors.EmptyDataError, FileNotFoundError):
+            continue
+        if df.empty:
+            continue
+        df = df.reindex(columns=METRIC_COLUMNS)
+        df["species"] = species_from_stem(stem)  # bare species key for the joins
+        frames.append(df)
+    if not frames:
+        return pd.DataFrame(columns=METRIC_COLUMNS)
+    return pd.concat(frames, ignore_index=True).reindex(columns=METRIC_COLUMNS)
 
 
 def build_busco_table(busco_lineage_dir, busco_euk_dir):
