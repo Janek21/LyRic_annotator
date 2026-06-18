@@ -34,9 +34,19 @@ import re
 import glob
 import json
 import argparse
+import sys
 import pandas as pd
 
 SUMMARY_DIR = "summary"
+
+_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+from buscoPlot import run as _busco_plot
+
+
+def run_busco_plot(glob_pattern, output_path):
+    _busco_plot(glob_pattern, output_path)
 
 # counts + derived metrics, one row per species (written by evaluation.sh /
 # merge_evaluation.sh). See isoquant_annotator/derived_metrics.md.
@@ -170,6 +180,13 @@ def main():
     general = general.sort_values("species").fillna("NA")
     general.to_csv(general_out, sep="\t", index=False)
     print(f"Wrote {general_out} ({len(general)} species)")
+
+    lin_dir = os.path.join(base_dir, "busco_lineage")
+    euk_dir = os.path.join(base_dir, "busco_eukaryote")
+    run_busco_plot(os.path.join(lin_dir, "*_Lbusco.json"),
+                   os.path.join(lin_dir, "busco_lineage_summary.png"))
+    run_busco_plot(os.path.join(euk_dir, "*_Ebusco.json"),
+                   os.path.join(euk_dir, "busco_eukaryote_summary.png"))
 
 
 if __name__ == "__main__":

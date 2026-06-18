@@ -11,6 +11,8 @@ echo ">STARTING at $(date)"
 species_name="$1"
 busco_db="${2:-/no_backup/rg/references/busco_downloads}"
 
+set -euo pipefail
+
 sp=$(echo "$species_name"|cut -f2 -d"_")
 echo "$sp"
 
