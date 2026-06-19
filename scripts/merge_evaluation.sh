@@ -3,8 +3,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=12G
 #SBATCH --time=90
-#SBATCH --output=logs/eval/%x_%j.out
-#SBATCH --error=logs/eval/%x_%j.err
+#SBATCH --output=logs/eval/merge/%x_%j.out
+#SBATCH --error=logs/eval/merge/%x_%j.err
 # Merge the LyRic annotation with the reference annotation and evaluate the result.
 # Runs only for species that have a reference annotation (data/input/Annotation.gff).
 # Evaluation = BUSCO protein completeness + gene/transcript counts (no gffcompare).

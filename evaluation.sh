@@ -16,12 +16,9 @@ set -euo pipefail
 sp=$(echo "$species_name"|cut -f2 -d"_")
 echo "$sp"
 
-#count gene + transcript models in one gffread pass. --keep-genes normalises any
-#input (tmerge GTF or AGAT GFF3) into gene + transcript records: real gene
-#features are preserved (AGAT-clustered loci, not the per-transcript gene_id),
-#and one gene + transcript is synthesised per id when the input has no such
-#feature. Prints "<gene_count>\t<transcript_count>".
-count_models() {  # $1=gff
+#count gene + transcript models in one gffread pass. --keep-genes normalises gtf/gff into gene + transcript records
+#one gene + transcript is synthesised per id when the input has no such feature
+count_models() {  # $1=gff #rints "<gene_count>\t<transcript_count>".
 	{ gffread "$1" --keep-genes -o - 2>/dev/null || true; } | awk -F'\t' '
 		/^#/ { next }
 		$3 ~ /^([A-Za-z_]*gene)$/                { g++; next }
@@ -54,7 +51,9 @@ find "$lyric_out" -type f -name "ont_*.gz"|xargs -r -P $(nproc) unpigz -df  #$(n
 #Removes the prefix and sufix(minNreads (N varies))
 for f in "$lyric_out"/ont_HpreCap_0+_[DSE]RR*.gff; do
     [ -e "$f" ] || continue
-    b=$(basename "$f"); b=${b#ont_HpreCap_0+_}; b=${b%%.HiSS.*}
+    b=$(basename "$f" .gff)   # drop .gff first
+    b=${b#ont_HpreCap_0+_}
+    b=${b%%.HiSS.*}
     mv -- "$f" "$lyric_out/$b.gff"
 done
 
@@ -66,13 +65,20 @@ file_count=${#gff_files[@]}
 
 echo "FC is $file_count"
 
+#tmerge tags models with per-read attributes: "contains"=reads merged(3p3 and 5p5 is read info). They get too long and crash
+clean_dir="$tmp_files/mergedReads_clean"
+mkdir -p "$clean_dir"
+for f in "${gff_files[@]}"; do
+	sed -E 's/[[:space:]]*(contains|3p_dists_to_3p|5p_dists_to_5p) "[^"]*";?//g' "$f" > "$clean_dir/$(basename "$f")"
+done
+
 if [ "$file_count" -eq 1 ]; then
 	#normalise gff
-	agat_convert_sp_gxf2gxf.pl -g "${gff_files[0]}" --config "$agat_cfg" -o "$tmp_files/merged_${sp}_ann.gff"
+	agat_convert_sp_gxf2gxf.pl -g "$clean_dir/$(basename "${gff_files[0]}")" --config "$agat_cfg" -o "$tmp_files/merged_${sp}_ann.gff"
 	echo "Normalized single file at $tmp_files/merged_${sp}_ann.gff"
 else
 	#merge gffs
-	agat_sp_merge_annotations.pl --gff "$lyric_out" --config "$agat_cfg" --out "$tmp_files/merged_${sp}_ann.gff"
+	agat_sp_merge_annotations.pl --gff "$clean_dir" --config "$agat_cfg" --out "$tmp_files/merged_${sp}_ann.gff"
 	echo "Merged files at $tmp_files/merged_${sp}_ann.gff"
 fi
 
@@ -96,9 +102,9 @@ if ! [[ "$gcode" =~ ^[0-9]+$ ]]; then
 fi
 echo "Translation table for $taxonID: $gcode"
 
-#predict ORFs with TD2 and (1) splice the resulting CDS onto the exon-only LyRic
-#annotation (tmerge models exons only), (2) emit one protein per gene (longest
-#isoform) for BUSCO. See scripts/infer_cds.sh.
+#predict ORFs with TD2: 
+#1 add CDS to lyric annotation(only exons(
+#2 emit one protein per gene (longest isoform) for BUSCO
 td_work="$tmp_files/transdecoder_work"
 shortname=$(python3 scripts/LyRic_setup.py shortname -s "$species_name")
 genome_fa="$species_name/data/fasta/$shortname.fa"
@@ -182,10 +188,7 @@ mv "$res_euk"/*.json "$euk_json"
 ln -sfv "$(realpath "$euk_json")" "$res_euk/${species_name}_${taxonID}_Ebusco.json"
 busco --plot "$busco_euk_dir"
 
-#predicted (CDS-augmented) annotation relocated to summary/, hardlinked back to the species location
-#(canonical inode lives in summary/pred so the species folder can be removed safely).
-#the exon-only $merged stays in place: mass_merge/mass_pred_merge gate on it and
-#merge_evaluation falls back to it for species evaluated before CDS integration.
+#predicted (CDS-augmented) annotation relocated to summary/, hardlinked back to the species location (so the species folder can be removed safely)
 pred_dir="summary/pred"
 mkdir -p "$pred_dir"
 pred_dest="$pred_dir/${species_name}_${taxonID}_pred.gff"
