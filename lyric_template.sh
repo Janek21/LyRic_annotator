@@ -61,7 +61,7 @@ shortname=$(python3 scripts/LyRic_setup.py shortname -s "$species_name")
 #config.default.yaml, per the species name
 python3 scripts/LyRic_setup.py config -s "$species_name" -o "$species_name/config/default.yaml"
 #decompress the genome sequence into the working dir (sources in ../data/species stay gzipped)
-python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$raw_name"*/GC*/GC*_genomic.fna.gz -o "$species_name/data/fasta/$shortname.fa"
+python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$raw_name"*/GC*/GC*_genomic.fna* -o "$species_name/data/fasta/$shortname.fa"
 #the genome must be a non-empty FASTA, otherwise the pipeline later dies on indexing
 genome_fa="$species_name/data/fasta/$shortname.fa"
 if [ ! -s "$genome_fa" ] || [ "$(head -c1 "$genome_fa")" != ">" ]; then
@@ -69,7 +69,7 @@ if [ ! -s "$genome_fa" ] || [ "$(head -c1 "$genome_fa")" != ">" ]; then
 	exit 1
 fi
 #copy the genome annotation (decompresses the gzipped source onto the plain Annotation.gff)
-python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$raw_name"*/GC*/"$raw_name"*GC*.gff.gz -o "$species_name/data/input/Annotation.gff"
+python3 scripts/LyRic_setup.py file_transfer -s "$species_name" -i ../data/species/"$raw_name"*/GC*/"$raw_name"*GC*.gff* -o "$species_name/data/input/Annotation.gff"
 #if no annotation was produced, find the closest related species that has one
 python3 scripts/annotation_fallback.py -s "$raw_name" -d "$longread_protists_db" -r "../data/species" -o "$species_name/data/input/Annotation.gff"
 #set up the sample annotations
